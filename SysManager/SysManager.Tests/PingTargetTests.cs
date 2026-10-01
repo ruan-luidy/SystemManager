@@ -24,7 +24,7 @@ public class PingTargetTests
         Assert.Null(t.JitterMs);
         Assert.Equal(0, t.LossPercent);
         Assert.Equal("—", t.Status);
-        Assert.Equal("#4CC9F0", t.ColorHex);
+        Assert.Equal("#3778BF", t.ColorHex);
         Assert.Equal(TargetRole.Generic, t.Role);
     }
 

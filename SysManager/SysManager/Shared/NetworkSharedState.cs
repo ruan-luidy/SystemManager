@@ -31,8 +31,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     internal static readonly string[] Palette =
     {
-        "#4CC9F0", "#80FFDB", "#F72585", "#FFD166",
-        "#B388FF", "#06D6A0", "#FF6B6B", "#F8961E",
+        "#3778BF", "#BA68C8", "#4DB6AC", "#FF8A65",
+        "#9CCC65", "#F06292", "#90A4AE", "#FFD54F",
     };
 
     internal readonly PingMonitorService Pinger;
@@ -610,26 +610,27 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     internal static Axis BuildTimeAxis() => new()
     {
         Labeler = v => new DateTime((long)v).ToString("HH:mm:ss", CultureInfo.InvariantCulture),
-        TextSize = 12,
+        TextSize = ChartTheme.AxisTextSize,
         // One tick per second minimum. Without it, an empty pre-run series makes LiveCharts
         // synthesise many sub-second ticks that the HH:mm:ss labeler collapses to a row of
         // identical "00:00:00" labels along the idle axis.
         MinStep = TimeSpan.FromSeconds(1).Ticks,
         NamePaint = new SolidColorPaint(SKColor.Parse("A3ADBF")),
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
-        SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80))
+        // No vertical grid lines: they only cut through the series. The horizontal ones are enough to read a value.
+        SeparatorsPaint = null
     };
 
     internal static Axis BuildValueAxis(string name) => new()
     {
         Name = name,
         MinLimit = 0,
-        TextSize = 13,
+        TextSize = ChartTheme.AxisTextSize,
         NamePaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
         SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80)) { StrokeThickness = 1 },
         Labeler = v => $"{v:F0} ms",
-        NameTextSize = 14,
+        NameTextSize = ChartTheme.AxisTextSize,
         ForceStepToMin = false,
         MinStep = 1
     };
@@ -638,10 +639,11 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     {
         Name = "Hop",
         MinStep = 1,
-        TextSize = 12,
+        TextSize = ChartTheme.AxisTextSize,
         NamePaint = new SolidColorPaint(SKColor.Parse("A3ADBF")),
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
-        SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80))
+        // No vertical grid lines: they only cut through the series. The horizontal ones are enough to read a value.
+        SeparatorsPaint = null
     };
 
     public void Dispose()

@@ -206,8 +206,8 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         // bytes/sec and the Y axis labels them as bits/sec (Mbps), matching the stat tiles.
         // Built BEFORE the first ApplyChartTheme(), which now also repaints the strokes so they are
         // readable from the first frame rather than from the first theme switch.
-        ThroughputSeries.Add(BuildArea("Download", "#60A5FA", _downBuffer));
-        ThroughputSeries.Add(BuildLine("Upload", "#A78BFA", _upBuffer));
+        ThroughputSeries.Add(BuildArea("Download", "#3778BF", _downBuffer));
+        ThroughputSeries.Add(BuildLine("Upload", "#BA68C8", _upBuffer));
         ApplyChartTheme();
         ThemeService.Instance.ThemeChanged += ApplyChartTheme;
 
@@ -616,14 +616,14 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         var color = SKColor.Parse(hex.TrimStart('#')).WithAlpha(230);
         var stroke = new SolidColorPaint(color, 2);
         _seriesStrokes.Add(new(color, stroke));
-        // The FILL keeps the designed hue at alpha 40. It is a background wash, not the mark that
+        // The FILL keeps the designed hue at alpha 66 (26%). It is a background wash, not the mark that
         // carries the reading, and darkening a translucent fill over a light card only muddies it —
         // the stroke above is what has to clear 3:1.
         return new LineSeries<DateTimePoint>
         {
             Name = name,
             Values = values,
-            Fill = new SolidColorPaint(color.WithAlpha(40)),
+            Fill = new SolidColorPaint(color.WithAlpha(66)),
             GeometrySize = 0,
             LineSmoothness = 0.3,
             Stroke = stroke,
@@ -653,23 +653,24 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     private static Axis BuildTimeAxis() => new()
     {
         Labeler = v => FormatAxisTick(v, TimeSpan.Zero),
-        TextSize = 12,
+        TextSize = ChartTheme.AxisTextSize,
         NamePaint = new SolidColorPaint(SKColor.Parse("A3ADBF")),
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
-        SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80))
+        // No vertical grid lines: they only cut through the series. The horizontal ones are enough to read a value.
+        SeparatorsPaint = null
     };
 
     private static Axis BuildRateAxis() => new()
     {
         Name = "Throughput",
         MinLimit = 0,
-        TextSize = 13,
+        TextSize = ChartTheme.AxisTextSize,
         NamePaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
         SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80)) { StrokeThickness = 1 },
         // Values are bytes/sec; label the axis in the same bits/sec units as the stat tiles.
         Labeler = v => BandwidthFormat.FormatRate(v),
-        NameTextSize = 14
+        NameTextSize = ChartTheme.AxisTextSize
     };
 
     private void ApplyChartTheme() => ChartTheme.Apply(

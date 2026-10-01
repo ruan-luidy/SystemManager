@@ -50,7 +50,7 @@ public class ChartThemeTests
         Assert.Equal(ChartTheme.Sk(t.TextPrimary), legend.Color);
         Assert.Equal(ChartTheme.Sk(t.TextPrimary), tooltipText.Color);
         Assert.Equal(ChartTheme.Sk(t.Surface2), tooltipBg.Color);
-        Assert.Equal(ChartTheme.Sk(t.TextPrimary), ((SolidColorPaint)axis.LabelsPaint!).Color);
+        Assert.Equal(ChartTheme.Sk(t.TextSecondary), ((SolidColorPaint)axis.LabelsPaint!).Color);
         Assert.Equal(ChartTheme.Sk(t.TextSecondary), ((SolidColorPaint)axis.NamePaint!).Color);
 
         // None of the repainted foregrounds may remain the sentinel magenta.
@@ -68,7 +68,7 @@ public class ChartThemeTests
             new SolidColorPaint(SKColors.Black), [axis]);
 
         var t = ThemeService.Instance.CurrentTheme;
-        var text = ChartTheme.Sk(t.TextPrimary);
+        var text = ChartTheme.Sk(t.TextSecondary);
         var bg = ChartTheme.Sk(t.Background);
         Assert.True(ContrastRatio(text, bg) >= 4.5,
             $"Chart label text must meet WCAG 4.5:1 against the theme background; got {ContrastRatio(text, bg):F2}:1.");
@@ -92,9 +92,9 @@ public class ChartThemeTests
         // The designed palette, exactly as the three chart view models declare it.
         string[] palette =
         [
-            "#60A5FA", "#A78BFA", "#34D399", "#F59E0B", "#EF4444",   // ResourceHistory + Bandwidth
-            "#4CC9F0", "#80FFDB", "#F72585", "#FFD166",              // ping palette 1-4
-            "#B388FF", "#06D6A0", "#FF6B6B", "#F8961E",              // ping palette 5-8
+            "#3778BF", "#BA68C8", "#4DB6AC", "#FF8A65", "#F06292",   // ResourceHistory + Bandwidth
+            "#3778BF", "#BA68C8", "#4DB6AC", "#FF8A65",              // ping palette 1-4
+            "#9CCC65", "#F06292", "#90A4AE", "#FFD54F",              // ping palette 5-8
         ];
 
         Assert.Equal(12, ThemePreset.Defaults.Count);

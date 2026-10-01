@@ -30,6 +30,19 @@ internal static class ChartTheme
     public static SKColor Sk(WpfColor c) => new(c.R, c.G, c.B, c.A);
 
     /// <summary>
+    /// Size of the axis labels and names. Small on purpose: the value that matters is the line, and big
+    /// axis type competes with it.
+    /// </summary>
+    public const float AxisTextSize = 11;
+
+    /// <summary>Alpha of the horizontal grid lines, drawn in the theme border colour.</summary>
+    /// <remarks>
+    /// Faint enough to give a reference for height without turning the background into a grid. The value
+    /// axis is the only one that draws them; the time axes have none.
+    /// </remarks>
+    private const byte GridAlpha = 110;
+
+    /// <summary>
     /// The minimum contrast a chart line must keep against the card it is drawn on. WCAG 2.2 SC
     /// 1.4.11 (Non-text Contrast) asks 3:1 of a graphical object needed to understand the content,
     /// which a data series plainly is.
@@ -102,8 +115,9 @@ internal static class ChartTheme
     }
 
     /// <summary>
-    /// Repaints the supplied legend/tooltip paints and axes from the active theme. Separator
-    /// lines use the theme border at low alpha so the gridlines stay subtle on any background.
+    /// Repaints the supplied legend/tooltip paints and axes from the active theme. Axis labels use the
+    /// secondary text colour, so they read as scale rather than content, and separator lines use the theme
+    /// border at low alpha so the gridlines stay subtle on any background.
     /// </summary>
     /// <param name="seriesBaseColors">
     /// Series paints keyed by their DESIGNED colour. Each paint is repainted to
@@ -123,7 +137,7 @@ internal static class ChartTheme
         var t = ThemeService.Instance.CurrentTheme;
         var primary = Sk(t.TextPrimary);
         var secondary = Sk(t.TextSecondary);
-        var separator = Sk(t.Border).WithAlpha(80);
+        var separator = Sk(t.Border).WithAlpha(GridAlpha);
         var surface = Sk(t.Surface);
 
         legendText.Color = primary;
@@ -132,7 +146,7 @@ internal static class ChartTheme
 
         foreach (var axis in axes)
         {
-            if (axis.LabelsPaint is SolidColorPaint labels) labels.Color = primary;
+            if (axis.LabelsPaint is SolidColorPaint labels) labels.Color = secondary;
             if (axis.NamePaint is SolidColorPaint name) name.Color = secondary;
             if (axis.SeparatorsPaint is SolidColorPaint sep) sep.Color = separator;
         }

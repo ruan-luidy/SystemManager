@@ -22,7 +22,7 @@ public sealed partial class PingTarget : ObservableObject
     [ObservableProperty] private double? _jitterMs;    // stddev of recent samples
     [ObservableProperty] private double _lossPercent;
     [ObservableProperty] private string _status = "—"; // "OK" / "Timeout" / "Error"
-    [ObservableProperty] private string _colorHex = "#4CC9F0";
+    [ObservableProperty] private string _colorHex = "#3778BF";
     [ObservableProperty] private TargetRole _role = TargetRole.Generic;
 
     public PingTarget() { }

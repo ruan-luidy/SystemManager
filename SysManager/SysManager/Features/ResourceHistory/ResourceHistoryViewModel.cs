@@ -112,11 +112,11 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         // Series are built BEFORE the first ApplyChartTheme(), because the theme pass now repaints the
         // line strokes too: the designed tints measure as little as 1.57:1 against a light preset's
         // card, so they have to be readable from the first frame, not from the first theme switch.
-        UsageSeries.Add(BuildLine("CPU", "#60A5FA", _cpuBuffer));
-        UsageSeries.Add(BuildLine("RAM", "#A78BFA", _ramBuffer));
-        UsageSeries.Add(BuildLine("GPU", "#34D399", _gpuBuffer));
-        TemperatureSeries.Add(BuildLine("CPU °C", "#F59E0B", _cpuTempBuffer));
-        TemperatureSeries.Add(BuildLine("GPU °C", "#EF4444", _gpuTempBuffer));
+        UsageSeries.Add(BuildLine("CPU", "#3778BF", _cpuBuffer));
+        UsageSeries.Add(BuildLine("RAM", "#BA68C8", _ramBuffer));
+        UsageSeries.Add(BuildLine("GPU", "#4DB6AC", _gpuBuffer));
+        TemperatureSeries.Add(BuildLine("CPU °C", "#FF8A65", _cpuTempBuffer));
+        TemperatureSeries.Add(BuildLine("GPU °C", "#F06292", _gpuTempBuffer));
 
         // Paint chart labels/legend/tooltip/lines from the active theme and keep them in sync,
         // so axis text stays readable on the light presets (a hardcoded near-white was
@@ -296,10 +296,11 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     private static Axis BuildTimeAxis() => new()
     {
         Labeler = TimeAxisLabel,
-        TextSize = 12,
+        TextSize = ChartTheme.AxisTextSize,
         NamePaint = new SolidColorPaint(SKColor.Parse("A3ADBF")),
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
-        SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80))
+        // No vertical grid lines: they only cut through the series. The horizontal ones are enough to read a value.
+        SeparatorsPaint = null
     };
 
     private static Axis BuildPercentAxis() => new()
@@ -307,24 +308,24 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         Name = "Usage (%)",
         MinLimit = 0,
         MaxLimit = 100,
-        TextSize = 13,
+        TextSize = ChartTheme.AxisTextSize,
         NamePaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
         SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80)) { StrokeThickness = 1 },
         Labeler = v => $"{v:F0}%",
-        NameTextSize = 14
+        NameTextSize = ChartTheme.AxisTextSize
     };
 
     private static Axis BuildTempAxis() => new()
     {
         Name = "Temperature (°C)",
         MinLimit = 0,
-        TextSize = 13,
+        TextSize = ChartTheme.AxisTextSize,
         NamePaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },
         SeparatorsPaint = new SolidColorPaint(SKColor.Parse("2A3244").WithAlpha(80)) { StrokeThickness = 1 },
         Labeler = v => $"{v:F0}°C",
-        NameTextSize = 14
+        NameTextSize = ChartTheme.AxisTextSize
     };
 
     /// <summary>
