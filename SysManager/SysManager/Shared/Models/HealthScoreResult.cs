@@ -75,7 +75,7 @@ public sealed record HealthRecommendation
     public required string Message { get; init; }
     public required string Severity { get; init; }  // "warning" or "critical"
 
-    public string IconGlyph => Severity == "critical" ? "\uE783" : "\uE7BA";
+    public string IconGlyph => Severity == "critical" ? "WarningOctagonBold" : "WarningBold";
     public string ColorHex => Severity == "critical" ? StatusColors.Bad : StatusColors.Warning;
 
     /// <summary>

@@ -85,7 +85,7 @@
                 </DataGrid>
 
                 <!-- Empty state -->
-                <v:EmptyState Glyph="&#xE777;"
+                <v:EmptyState Glyph="ArrowCounterClockwiseBold"
                               Title="{Binding EmptyTitle}"
                               Message="{Binding EmptyMessage}"
                               Visibility="{Binding HasPoints, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Features.Logs.LogsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ph="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:v="clr-namespace:SysManager.Shared.Controls">
     <UserControl.Resources>
         <Style x:Key="SevDot" TargetType="Ellipse">
@@ -301,21 +302,21 @@
                                             AutomationProperties.Name="{Binding Message, StringFormat='Mark or unmark this event: {0}'}"
                                             ToolTip="Mark this event so it stays easy to find while you scroll"
                                             VerticalAlignment="Center" HorizontalAlignment="Center">
-                                        <TextBlock FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
+                                        <ph:PackIconPhosphorIcons Width="14" Height="14">
+                                            <ph:PackIconPhosphorIcons.Style>
+                                                <Style TargetType="ph:PackIconPhosphorIcons">
                                                     <!-- Outline flag when unmarked, solid amber when marked. -->
-                                                    <Setter Property="Text" Value="&#xEB4F;"/>
+                                                    <Setter Property="Kind" Value="FlagBold"/>
                                                     <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
-                                                            <Setter Property="Text" Value="&#xEB4C;"/>
+                                                            <Setter Property="Kind" Value="FlagFill"/>
                                                             <Setter Property="Foreground" Value="{DynamicResource WarningStripe}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
+                                            </ph:PackIconPhosphorIcons.Style>
+                                        </ph:PackIconPhosphorIcons>
                                     </Button>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
@@ -353,7 +354,7 @@
                 </DataGrid>
 
                     <!-- No-results overlay: entries were loaded but the filters hid all of them. -->
-                    <v:EmptyState Glyph="&#xE721;"
+                    <v:EmptyState Glyph="MagnifyingGlassBold"
                                   Title="No events match your filters"
                                   Message="Try adjusting severity checkboxes or clearing the search."
                                   Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}"/>
@@ -362,7 +363,7 @@
                          applied to anything. Without this the grid was simply blank next to
                          "Loaded 0 events", which reads as "this log is empty" when the real
                          reason is that the Security log needs elevation. -->
-                    <v:EmptyState Glyph="&#xE72E;"
+                    <v:EmptyState Glyph="LockBold"
                                   Title="This log could not be read"
                                   Message="{Binding StatusMessage}"
                                   Visibility="{Binding LoadWasRefused, Converter={StaticResource FlexVis}}"/>

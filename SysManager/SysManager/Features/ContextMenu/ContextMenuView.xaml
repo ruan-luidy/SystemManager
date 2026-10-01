@@ -331,7 +331,7 @@
             </DataGrid>
 
             <!-- Empty state -->
-            <v:EmptyState Glyph="&#xE946;"
+            <v:EmptyState Glyph="InfoBold"
                           Title="No context menu entries"
                           Message="Run a scan to list right-click menu entries you can toggle."
                           Visibility="{Binding Entries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

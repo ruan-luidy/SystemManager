@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Features.AppBlocker.AppBlockerView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ph="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:SysManager.Features.AppBlocker"
              xmlns:v="clr-namespace:SysManager.Shared.Controls"
              d:DataContext="{d:DesignInstance vm:AppBlockerViewModel}"
@@ -42,8 +43,7 @@
                 BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,10" Margin="0,0,0,12"
                 Visibility="{Binding HasUnrecoverableBlock, Converter={StaticResource FlexVis}}">
             <DockPanel>
-                <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
-                           FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,10,0"/>
+                <ph:PackIconPhosphorIcons Kind="WarningBold" Width="14" Height="14" DockPanel.Dock="Left" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,10,0"/>
                 <TextBlock Text="{Binding UnrecoverableWarning}" Foreground="{DynamicResource WarningText}"
                            Style="{StaticResource Subtle}" TextWrapping="Wrap" VerticalAlignment="Center"
                            AutomationProperties.Name="Unrecoverable block warning"/>
@@ -110,11 +110,10 @@
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                           FontSize="13" Foreground="{DynamicResource WarningText}"
-                                           VerticalAlignment="Center" Margin="0,0,6,0"
-                                           ToolTip="Undoing this block needs administrator rights it may have taken away."
-                                           Visibility="{Binding IsUnrecoverable, Converter={StaticResource FlexVis}}"/>
+                                <ph:PackIconPhosphorIcons Kind="WarningBold" Width="13" Height="13" Foreground="{DynamicResource WarningText}"
+                                                          VerticalAlignment="Center" Margin="0,0,6,0"
+                                                          ToolTip="Undoing this block needs administrator rights it may have taken away."
+                                                          Visibility="{Binding IsUnrecoverable, Converter={StaticResource FlexVis}}"/>
                                 <TextBlock Text="{Binding ExecutableName}" VerticalAlignment="Center"
                                            AutomationProperties.Name="{Binding ExecutableName}"/>
                             </StackPanel>
@@ -125,7 +124,7 @@
         </DataGrid>
 
         <!-- Empty state, or that the block list could not be read (#2503) -->
-        <v:EmptyState Grid.Row="5" Glyph="&#xE730;"
+        <v:EmptyState Grid.Row="5" Glyph="ShieldWarningBold"
                       Title="{Binding EmptyTitle}"
                       Message="{Binding EmptyMessage}"
                       Visibility="{Binding BlockedApps.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

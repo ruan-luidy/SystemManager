@@ -45,7 +45,7 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <v:EmptyState Glyph="&#xE946;"
+                <v:EmptyState Glyph="InfoBold"
                               Title="No exportable settings found yet"
                               Message="Change something you would want on another PC — pick a theme, set a dark-mode schedule, save a volume preset — then refresh."
                               Visibility="{Binding HasSections, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

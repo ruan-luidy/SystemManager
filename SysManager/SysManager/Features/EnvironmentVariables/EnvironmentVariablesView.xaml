@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Features.EnvironmentVariables.EnvironmentVariablesView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ph="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:SysManager.Features.EnvironmentVariables"
              xmlns:v="clr-namespace:SysManager.Shared.Controls"
              d:DataContext="{d:DesignInstance vm:EnvironmentVariablesViewModel}"
@@ -146,7 +147,7 @@
                 <!-- No-results state: variables were read, and the search plus scope filters hid all of
                      them. Gated on the flag rather than the count so a scope the machine has nothing in is
                      never described as a search that matched nothing. -->
-                <v:EmptyState Glyph="&#xE721;"
+                <v:EmptyState Glyph="MagnifyingGlassBold"
                               Title="No variables match your search"
                               Message="Clear the search box, or switch the scope filter back to All."
                               Visibility="{Binding HasNoMatches, Converter={StaticResource FlexVis}}"/>
@@ -203,21 +204,27 @@
                                                 </StackPanel>
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                <Button Content="&#xE74A;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                <Button
                                                         Command="{Binding DataContext.MoveDirectoryUpCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                         CommandParameter="{Binding}"
                                                         AutomationProperties.Name="Move directory up"
-                                                        Style="{StaticResource GhostButton}" Padding="6,2"/>
-                                                <Button Content="&#xE74B;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                        Style="{StaticResource GhostButton}" Padding="6,2">
+                                                    <ph:PackIconPhosphorIcons Kind="ArrowUpBold" Width="12" Height="12"/>
+                                                </Button>
+                                                <Button
                                                         Command="{Binding DataContext.MoveDirectoryDownCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                         CommandParameter="{Binding}"
                                                         AutomationProperties.Name="Move directory down"
-                                                        Style="{StaticResource GhostButton}" Padding="6,2"/>
-                                                <Button Content="&#xE711;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                        Style="{StaticResource GhostButton}" Padding="6,2">
+                                                    <ph:PackIconPhosphorIcons Kind="ArrowDownBold" Width="12" Height="12"/>
+                                                </Button>
+                                                <Button
                                                         Command="{Binding DataContext.RemoveDirectoryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                         CommandParameter="{Binding}"
                                                         AutomationProperties.Name="Remove directory"
-                                                        Style="{StaticResource GhostButton}" Padding="6,2"/>
+                                                        Style="{StaticResource GhostButton}" Padding="6,2">
+                                                    <ph:PackIconPhosphorIcons Kind="XBold" Width="12" Height="12"/>
+                                                </Button>
                                             </StackPanel>
                                         </Grid>
                                     </Border>

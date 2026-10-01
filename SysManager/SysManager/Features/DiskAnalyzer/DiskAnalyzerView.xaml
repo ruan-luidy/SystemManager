@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Features.DiskAnalyzer.DiskAnalyzerView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ph="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:SysManager.Features.DiskAnalyzer"
              xmlns:v="clr-namespace:SysManager.Shared.Controls"
              d:DataContext="{d:DesignInstance vm:DiskAnalyzerViewModel}"
@@ -143,12 +144,12 @@
                                          (IsAccessDenied), but nothing showed it, so the size was quietly
                                          too small and the user was told nothing. Informational rather than
                                          alarming: a locked AppData subfolder is a normal, common case. -->
-                                    <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                               Foreground="{DynamicResource Warning}"
-                                               VerticalAlignment="Center" Margin="6,0,0,0"
-                                               AutomationProperties.Name="Partly unreadable"
-                                               ToolTip="Part of this folder could not be read, so it may be using more space than shown."
-                                               Visibility="{Binding IsAccessDenied, Converter={StaticResource FlexVis}}"/>
+                                    <ph:PackIconPhosphorIcons Kind="WarningBold" Width="11" Height="11"
+                                                              Foreground="{DynamicResource Warning}"
+                                                              VerticalAlignment="Center" Margin="6,0,0,0"
+                                                              AutomationProperties.Name="Partly unreadable"
+                                                              ToolTip="Part of this folder could not be read, so it may be using more space than shown."
+                                                              Visibility="{Binding IsAccessDenied, Converter={StaticResource FlexVis}}"/>
                                 </StackPanel>
                                 <TextBlock Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}">
                                     <Run Text="{Binding FileCount, Mode=OneWay, StringFormat='{}{0:N0} files'}"/>
@@ -169,19 +170,21 @@
                                        HorizontalAlignment="Right"/>
 
                             <!-- Open in Explorer -->
-                            <Button Grid.Column="4" Content="&#xE838;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" ToolTip="Show in Explorer"
+                            <Button Grid.Column="4" ToolTip="Show in Explorer"
                                     AutomationProperties.Name="{Binding Name, StringFormat='Show {0} in Explorer'}"
                                     Command="{Binding DataContext.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                     CommandParameter="{Binding}"
-                                    Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"
-                                    Margin="8,0,0,0"/>
+                                    Style="{StaticResource GhostButton}" Padding="4,2"
+                                    Margin="8,0,0,0">
+                                <ph:PackIconPhosphorIcons Kind="FolderOpenBold" Width="12" Height="12"/>
+                            </Button>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
 
             <!-- Empty state -->
-            <v:EmptyState Glyph="&#xE838;"
+            <v:EmptyState Glyph="FolderOpenBold"
                           Title="{Binding EmptyTitle}"
                           Message="{Binding EmptyMessage}"
                           Visibility="{Binding Entries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

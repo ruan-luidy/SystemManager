@@ -7510,68 +7510,57 @@ public partial class ArchitectureTests
     private static partial Regex SerilogCall();
 
     /// <summary>
-    /// Every icon glyph names an icon font, so none of them renders as a colour emoji.
-    /// <para>A character reference above U+FFFF is outside Segoe Fluent Icons, so a <c>TextBlock</c>
-    /// carrying one with no <c>FontFamily</c> falls back to Segoe UI Emoji and Windows draws a
-    /// multi-colour emoji. The elevated admin banner did exactly that in 27 views:
-    /// <c>&amp;#x1F6E1;</c> (SHIELD) with no font — while the NOT-elevated banner a few lines above it,
-    /// in 25 of those same views, used <c>&amp;#xE83D;</c> with an explicit Fluent family. The two states
-    /// of one banner drew their icon from two different type systems, and the emoji one contradicts the
-    /// product rule that icons are real, never cartoonish.</para>
-    /// <para>Checked as a character range rather than a list of known emoji, so a NEW emoji is caught
-    /// too. A glyph that legitimately wants a colour emoji can still have one — it just has to say so
-    /// by naming a font.</para>
+    /// Every icon is a Phosphor icon: no glyph from an icon font, and no emoji.
+    /// <para>The icons used to be Segoe Fluent Icons codepoints, with Segoe MDL2 Assets as the fallback on
+    /// Windows 10. The two fonts do not hold the same glyphs, so a codepoint missing from MDL2 drew an empty
+    /// box, and every new icon had to be checked against both font files by hand. The Phosphor icons ship
+    /// inside the app as vector paths and look the same everywhere, so one icon font glyph coming back would
+    /// bring the problem back with it.</para>
+    /// <para>The emoji half is older. A character reference above U+FFFF with no font falls back to Segoe UI
+    /// Emoji, and Windows draws a multi-colour emoji — the elevated admin banner did exactly that in 27 views
+    /// with <c>&amp;#x1F6E1;</c>. Checked as a character range rather than a list of known emoji, so a NEW
+    /// emoji is caught too.</para>
     /// </summary>
     [Fact]
-    public void EveryIconGlyph_NamesAnIconFont()
+    public void EveryIcon_IsAPhosphorIcon()
     {
         var offenders = new List<string>();
-        var scanned = 0;
 
         var files = TestPaths.ViewFiles("*.xaml").ToArray()
             .Append(TestPaths.AppPath("MainWindow.xaml"))
-            .Where(File.Exists);
+            .Where(File.Exists)
+            .ToArray();
 
         foreach (var file in files)
         {
-            var source = File.ReadAllText(file);
+            var source = WithoutXamlComments(File.ReadAllText(file));
             var name = Path.GetFileName(file);
 
-            foreach (var match in AstralCharacterReference().Matches(source).Cast<Match>())
+            foreach (var match in IconFontGlyphReference().Matches(source).Cast<Match>()
+                         .Concat(AstralCharacterReference().Matches(source).Cast<Match>()))
             {
-                scanned++;
-
-                // The element this glyph sits on: from the opening '<' before it to the next '>'.
-                var open = source.LastIndexOf('<', match.Index);
-                var close = source.IndexOf('>', match.Index);
-                if (open < 0 || close < 0) continue;
-                var element = source[open..close];
-
-                if (element.Contains("FontFamily", StringComparison.Ordinal)) continue;
-
                 var line = source[..match.Index].Count(c => c == '\n') + 1;
-                offenders.Add($"{name}:{line} {match.Value} has no FontFamily");
+                offenders.Add($"{name}:{line} {match.Value}");
+            }
+
+            if (source.Contains("Segoe Fluent Icons", StringComparison.Ordinal)
+                || source.Contains("Segoe MDL2 Assets", StringComparison.Ordinal))
+            {
+                offenders.Add($"{name} still names an icon font");
             }
         }
 
-        // Vacuity floor: the views carry many Fluent glyphs, so if the scan read nothing the
-        // character-reference pattern is broken rather than the code being clean.
-        // RE-MEASURED from 100 to 80 after the elevation banner was extracted: 60 hand-copied banner blocks
-        // each carried a shield glyph, and one control now carries two. The population fell to 85 and the old
-        // floor fired — correctly. It is set below the new count for the same reason it was before, not to
-        // accommodate a failure.
-        var glyphs = files.Sum(f => FluentGlyphReference().Matches(File.ReadAllText(f)).Count);
-        Assert.True(glyphs >= 80,
-            $"Only {glyphs} icon glyphs were seen across the views — the guard is not reading them. "
+        // Vacuity floor: if no icon was seen, the pattern is broken rather than the views being clean.
+        var icons = files.Sum(f => PhosphorIconReference().Matches(File.ReadAllText(f)).Count);
+        Assert.True(icons >= 80,
+            $"Only {icons} Phosphor icons were seen across the views — the guard is not reading them. "
             + "Fix this test rather than trusting its pass.");
 
         Assert.True(offenders.Count == 0,
-            "These glyphs are above U+FFFF and name no font, so Windows falls back to Segoe UI Emoji "
-            + "and draws a colour emoji instead of an icon. Use the Segoe Fluent Icons equivalent with "
-            + "FontFamily=\"Segoe Fluent Icons,Segoe MDL2 Assets\" (the shield this app uses is "
-            + "&#xEA18;):\n  "
+            "These draw an icon from a font (or an emoji) instead of a Phosphor icon. Use "
+            + "<ph:PackIconPhosphorIcons Kind=\"...Bold\"/>, or Glyph=\"...Bold\" on an EmptyState:\n  "
             + string.Join("\n  ", offenders)
-            + $"\n({scanned} astral references seen, {glyphs} icon glyphs scanned)");
+            + $"\n({icons} Phosphor icons seen)");
     }
 
     /// <summary>
@@ -7599,7 +7588,7 @@ public partial class ArchitectureTests
         var shell = File.ReadAllText(TestPaths.AppPath("MainWindow.xaml"));
 
         var groups = GroupGlyph().Matches(vm).Cast<Match>()
-            .Select(m => (Id: m.Groups["id"].Value, Glyph: m.Groups["glyph"].Value.ToUpperInvariant()))
+            .Select(m => (Id: m.Groups["id"].Value, Glyph: m.Groups["glyph"].Value))
             .ToArray();
 
         Assert.True(groups.Length >= 12,
@@ -7624,26 +7613,26 @@ public partial class ArchitectureTests
             "MainWindow.xaml has no element with AutomationId=\"ElevationBadge\" — if it was renamed, "
             + "update this guard in the same PR rather than losing the check.");
 
-        var badge = CharacterReference().Match(shell, badgeAt);
+        var badge = PhosphorKind().Match(shell, badgeAt);
         Assert.True(badge.Success,
-            "no character reference follows the elevation badge, so its glyph could not be read.");
+            "no icon Kind follows the elevation badge, so its icon could not be read.");
 
-        var badgeGlyph = badge.Groups["hex"].Value.ToUpperInvariant();
+        var badgeGlyph = badge.Groups["kind"].Value;
         var clash = groups.Where(g => string.Equals(g.Glyph, badgeGlyph, StringComparison.Ordinal))
             .Select(g => g.Id)
             .ToArray();
 
         Assert.True(clash.Length == 0,
-            $"the elevation badge draws U+{badgeGlyph}, which is also the icon for "
+            $"the elevation badge draws {badgeGlyph}, which is also the icon for "
             + $"{string.Join(", ", clash)}. The badge means \"needs administrator\" and the group means a "
             + "topic — one symbol cannot carry both in a window that shows them together. Change one.");
     }
 
     /// <summary>
-    /// A sidebar group declaration, capturing its id and the escaped codepoint of its glyph:
-    /// <c>Group("grp-x", "Label", ""</c>.
+    /// A sidebar group declaration, capturing its id and the Phosphor icon it names:
+    /// <c>Group("grp-x", "Label", "HouseBold"</c>.
     /// </summary>
-    [GeneratedRegex(@"Group\(""(?<id>[^""]+)"",\s*""[^""]+"",\s*""\\u(?<glyph>[0-9A-Fa-f]{4})""",
+    [GeneratedRegex(@"Group\(""(?<id>[^""]+)"",\s*""[^""]+"",\s*""(?<glyph>[A-Z][A-Za-z]+)""",
                     RegexOptions.CultureInvariant)]
     private static partial Regex GroupGlyph();
 
@@ -7752,7 +7741,7 @@ public partial class ArchitectureTests
     /// <summary>
     /// A sidebar group declaration, capturing its id, label and written subtitle.
     /// </summary>
-    [GeneratedRegex(@"Group\(""(?<id>[^""]+)"",\s*""(?<label>[^""]+)"",\s*""\\u[0-9A-Fa-f]{4}"",\s*""(?<subtitle>[^""]*)""",
+    [GeneratedRegex(@"Group\(""(?<id>[^""]+)"",\s*""(?<label>[^""]+)"",\s*""[A-Z][A-Za-z]+"",\s*""(?<subtitle>[^""]*)""",
                     RegexOptions.CultureInvariant)]
     private static partial Regex GroupSubtitle();
 
@@ -7762,17 +7751,22 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"MaxHeight=""(?<v>[0-9.]+)""", RegexOptions.CultureInvariant)]
     private static partial Regex SubtitleMaxHeight();
 
-    /// <summary>A XAML character reference, capturing the hex codepoint.</summary>
-    [GeneratedRegex(@"&#x(?<hex>[0-9A-Fa-f]{4});", RegexOptions.CultureInvariant)]
-    private static partial Regex CharacterReference();
+    /// <summary>The <c>Kind</c> of a Phosphor icon element.</summary>
+    [GeneratedRegex(@"Kind=""(?<kind>[A-Za-z]+)""", RegexOptions.CultureInvariant)]
+    private static partial Regex PhosphorKind();
 
     // A character reference above U+FFFF — i.e. &#x1F???; and up, which is where the emoji planes are.
     // Five hex digits or more cannot be a BMP icon-font glyph.
     [GeneratedRegex(@"&#x[0-9A-Fa-f]{5,};", RegexOptions.CultureInvariant)]
     private static partial Regex AstralCharacterReference();
 
-    [GeneratedRegex(@"&#x[0-9A-Fa-f]{4};", RegexOptions.CultureInvariant)]
-    private static partial Regex FluentGlyphReference();
+    // A character reference in the Private Use Area, where the icon fonts keep their glyphs.
+    [GeneratedRegex(@"&#x[Ee][0-9A-Fa-f]{3};", RegexOptions.CultureInvariant)]
+    private static partial Regex IconFontGlyphReference();
+
+    // A Phosphor icon: the element itself, or the name an EmptyState is given.
+    [GeneratedRegex(@"<ph:PackIconPhosphorIcons\b|<v:EmptyState\b[^>]*\bGlyph=""[A-Za-z]+""", RegexOptions.CultureInvariant)]
+    private static partial Regex PhosphorIconReference();
 
     /// <summary>
     /// The release workflow must RUN the exe it is about to publish, and must do so while a failure

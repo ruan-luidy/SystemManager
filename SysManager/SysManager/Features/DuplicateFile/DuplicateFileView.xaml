@@ -171,7 +171,7 @@
             </ListView>
 
             <!-- Empty state -->
-            <v:EmptyState Glyph="&#xE946;"
+            <v:EmptyState Glyph="InfoBold"
                           Title="{Binding EmptyTitle}"
                           Message="{Binding EmptyMessage}"
                           Visibility="{Binding Groups.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

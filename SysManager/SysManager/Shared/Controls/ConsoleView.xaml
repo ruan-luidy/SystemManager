@@ -58,7 +58,7 @@
             </ListBox>
 
             <!-- Empty state -->
-            <v:EmptyState Grid.Row="1" Glyph="&#xE946;"
+            <v:EmptyState Grid.Row="1" Glyph="InfoBold"
                           Title="No output yet"
                           Message="Output from running operations will stream here."
                           Visibility="{Binding Lines.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

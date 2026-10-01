@@ -121,7 +121,7 @@
         </DataGrid>
 
         <!-- Empty state -->
-        <v:EmptyState Grid.Row="3" Glyph="&#xE74D;"
+        <v:EmptyState Grid.Row="3" Glyph="TrashBold"
                       Title="No broken shortcuts found"
                       Message="Run a scan to find shortcuts pointing at missing targets."
                       Visibility="{Binding BrokenShortcuts.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

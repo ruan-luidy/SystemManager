@@ -13,6 +13,8 @@ public class SidebarSelectionContractTests
         "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
     private static readonly XNamespace Xaml =
         "http://schemas.microsoft.com/winfx/2006/xaml";
+    private static readonly XNamespace IconPacks =
+        "http://metro.mahapps.com/winfx/xaml/iconpacks";
 
     [Fact]
     public void LiveRows_ShareSelectedVisualTreatment()
@@ -56,13 +58,19 @@ public class SidebarSelectionContractTests
             .Where(element =>
                 (string?)element.Attribute("Style") == "{StaticResource SidebarNavText}")
             .ToList();
+        var liveIcons = document
+            .Descendants(IconPacks + "PackIconPhosphorIcons")
+            .Where(element =>
+                (string?)element.Attribute("Style") == "{StaticResource SidebarNavIcon}")
+            .ToList();
 
         Assert.Equal(2, liveRows.Count);
         Assert.Equal(2, liveMarks.Count);
-        // Three, and which three matters: the single-item row's glyph and label, and the leaf row's label.
-        // A leaf has no glyph of its own — the group above it carries the icon — so a fourth here would
+        // Two labels, the single-item row's and the leaf row's, and one icon, the single-item row's.
+        // A leaf has no icon of its own — the group above it carries it — so a second icon here would
         // mean the empty gutter came back.
-        Assert.Equal(3, liveTexts.Count);
+        Assert.Equal(2, liveTexts.Count);
+        Assert.Single(liveIcons);
         Assert.All(liveRows, row => Assert.Null(row.Attribute("Background")));
         Assert.All(liveMarks, mark => Assert.Null(mark.Attribute("Visibility")));
         Assert.All(

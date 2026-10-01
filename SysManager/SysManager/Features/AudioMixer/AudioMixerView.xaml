@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Features.AudioMixer.AudioMixerView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ph="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:v="clr-namespace:SysManager.Shared.Controls"
              xmlns:vm="clr-namespace:SysManager.Features.AudioMixer"
              d:DataContext="{d:DesignInstance vm:AudioMixerViewModel}"
@@ -116,9 +117,8 @@
                                                  System Sounds pseudo-session (RoutingSupported is false for it). -->
                                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
                                                         Visibility="{Binding RoutingSupported, Converter={StaticResource FlexVis}}">
-                                                <TextBlock Text="&#xE7F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                                           FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
-                                                           Foreground="{DynamicResource TextMuted}"/>
+                                                <ph:PackIconPhosphorIcons Kind="SpeakerHighBold" Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                          Foreground="{DynamicResource TextMuted}"/>
                                                 <TextBlock Text="Output:" Style="{StaticResource Caption}"
                                                            VerticalAlignment="Center" Margin="0,0,6,0"/>
                                                 <!-- The placeholder overlay exists because an unread route must
@@ -148,8 +148,7 @@
                                                     Visibility="{Binding ShowGuidedRouting, Converter={StaticResource FlexVis}}"
                                                     AutomationProperties.Name="{Binding DisplayName, StringFormat='Choose output device for {0} in Windows settings'}">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="&#xE7F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                                               FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                    <ph:PackIconPhosphorIcons Kind="SpeakerHighBold" Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                                     <TextBlock Text="Choose output device…" FontSize="12" VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Button>
@@ -164,21 +163,21 @@
                                                 Margin="14,0,0,0" Padding="10,6" VerticalAlignment="Center"
                                                 Command="{Binding ToggleMuteCommand}"
                                                 AutomationProperties.Name="{Binding DisplayName, StringFormat='Mute {0}'}">
-                                            <TextBlock FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="15">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
+                                            <ph:PackIconPhosphorIcons Width="15" Height="15">
+                                                <ph:PackIconPhosphorIcons.Style>
+                                                    <Style TargetType="ph:PackIconPhosphorIcons">
                                                         <!-- Speaker glyph; switches to muted-speaker when muted. -->
-                                                        <Setter Property="Text" Value="&#xE767;"/>
+                                                        <Setter Property="Kind" Value="SpeakerHighBold"/>
                                                         <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsMuted}" Value="True">
-                                                                <Setter Property="Text" Value="&#xE74F;"/>
+                                                                <Setter Property="Kind" Value="SpeakerSlashBold"/>
                                                                 <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
+                                                </ph:PackIconPhosphorIcons.Style>
+                                            </ph:PackIconPhosphorIcons>
                                         </Button>
                                     </Grid>
                                 </Border>
@@ -188,7 +187,7 @@
                 </ScrollViewer>
 
                 <!-- Empty state -->
-                <v:EmptyState Glyph="&#xE767;"
+                <v:EmptyState Glyph="SpeakerHighBold"
                               Title="No apps are playing audio"
                               Message="Play something — a video, music, or a game — and it will appear here with its own volume slider."
                               Visibility="{Binding HasSessions, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

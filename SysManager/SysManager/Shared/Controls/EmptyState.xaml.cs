@@ -4,6 +4,7 @@
 
 using System.Windows;
 using System.Windows.Controls;
+using MahApps.Metro.IconPacks;
 
 namespace SysManager.Shared.Controls;
 
@@ -18,9 +19,10 @@ public partial class EmptyState : UserControl
 {
     public EmptyState() => InitializeComponent();
 
-    /// <summary>Optional Segoe Fluent Icons glyph shown above the title. Omit for a text-only state.</summary>
+    /// <summary>Optional Phosphor icon shown above the title. Omit for a text-only state.</summary>
     public static readonly DependencyProperty GlyphProperty =
-        DependencyProperty.Register(nameof(Glyph), typeof(string), typeof(EmptyState), new PropertyMetadata(string.Empty));
+        DependencyProperty.Register(nameof(Glyph), typeof(PackIconPhosphorIconsKind), typeof(EmptyState),
+        new PropertyMetadata(PackIconPhosphorIconsKind.None));
 
     /// <summary>Primary line — what the empty list means (e.g. "No broken shortcuts found").</summary>
     public static readonly DependencyProperty TitleProperty =
@@ -30,9 +32,9 @@ public partial class EmptyState : UserControl
     public static readonly DependencyProperty MessageProperty =
         DependencyProperty.Register(nameof(Message), typeof(string), typeof(EmptyState), new PropertyMetadata(string.Empty));
 
-    public string Glyph
+    public PackIconPhosphorIconsKind Glyph
     {
-        get => (string)GetValue(GlyphProperty);
+        get => (PackIconPhosphorIconsKind)GetValue(GlyphProperty);
         set => SetValue(GlyphProperty, value);
     }
 

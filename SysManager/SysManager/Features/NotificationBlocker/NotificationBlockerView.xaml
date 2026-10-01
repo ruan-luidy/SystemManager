@@ -129,7 +129,7 @@
         </Border>
 
         <!-- Empty state -->
-        <v:EmptyState Grid.Row="4" Glyph="&#xEA8F;"
+        <v:EmptyState Grid.Row="4" Glyph="BellBold"
                       Title="No notification senders found"
                       Message="Apps appear here after they show their first notification — or nothing matches your search."
                       Visibility="{Binding FilteredApps.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

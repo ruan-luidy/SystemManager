@@ -1,7 +1,8 @@
 <!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
 <UserControl x:Class="SysManager.Shared.Controls.DevelopmentBanner"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ph="http://metro.mahapps.com/winfx/xaml/iconpacks">
 
     <!-- Reusable banner for features that are implemented but not yet QA-verified.
          Drop <v:DevelopmentBanner/> at the top of a view to surface its "Preview"
@@ -14,9 +15,8 @@
             <Border Background="{DynamicResource Info}" Width="4" HorizontalAlignment="Left"
                     CornerRadius="2" Margin="-12,-10,0,-10"/>
             <StackPanel Orientation="Horizontal" Margin="10,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="&#xE9F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                           FontSize="15" Foreground="{DynamicResource Info}"
-                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <ph:PackIconPhosphorIcons Kind="FlaskBold" Width="15" Height="15" Foreground="{DynamicResource Info}"
+                                          VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="Preview feature" Style="{StaticResource Body}" FontWeight="SemiBold"
                                Foreground="{DynamicResource Info}"/>

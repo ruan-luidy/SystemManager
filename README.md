@@ -2165,6 +2165,7 @@ and elevation state in a format ready to paste into a bug report.
 - Microsoft.Extensions.DependencyInjection for IoC
 - WPF-UI (lepoco/wpfui) for Fluent Design theme and controls
 - LiveCharts2 for the real-time latency chart
+- Phosphor Icons (MahApps.Metro.IconPacks.PhosphorIcons) for the icons
 - H.NotifyIcon.Wpf for system tray integration
 - LibreHardwareMonitor and NvAPIWrapper for CPU/GPU/disk temperature sensors
 - Serilog for structured logging

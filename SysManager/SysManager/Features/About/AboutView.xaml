@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Features.About.AboutView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ph="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:helpers="clr-namespace:SysManager.Features.About.Helpers"
              xmlns:v="clr-namespace:SysManager.Shared.Controls">
 
@@ -155,8 +156,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                               FontSize="18" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <ph:PackIconPhosphorIcons Kind="DownloadSimpleBold" Width="18" Height="18" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <TextBlock Text="Update available" Style="{StaticResource MetricCompact}"
                                                Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
                                     <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
@@ -325,7 +325,7 @@
                              nothing at all, which reads as the feature being broken rather than the
                              connection being down. Gated on the flag so it cannot appear while the request
                              — the slowest thing on this tab — is still in flight. -->
-                        <v:EmptyState Glyph="&#xE704;"
+                        <v:EmptyState Glyph="CloudSlashBold"
                                       Title="Could not reach GitHub"
                                       Message="Release notes need a connection. Check yours and press Refresh."
                                       Visibility="{Binding HistoryUnavailable, Converter={StaticResource FlexVis}}"/>

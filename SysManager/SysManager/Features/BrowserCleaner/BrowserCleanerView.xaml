@@ -90,7 +90,7 @@
                 </DataGrid>
 
                 <!-- Empty state -->
-                <v:EmptyState Glyph="&#xE774;"
+                <v:EmptyState Glyph="GlobeBold"
                               Title="No browser data found"
                               Message="Press Scan to look for cleanable cache, history, and cookies."
                               Visibility="{Binding HasItems, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

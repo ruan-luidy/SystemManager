@@ -70,7 +70,7 @@
                 </ScrollViewer>
 
                 <!-- Empty state -->
-                <v:EmptyState Glyph="&#xE9D9;"
+                <v:EmptyState Glyph="PulseBold"
                               Title="No report yet"
                               Message="Click Generate to build a full system snapshot."
                               Visibility="{Binding HasReport, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Features.SettingsWatchdog.SettingsWatchdogView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ph="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:v="clr-namespace:SysManager.Shared.Controls"
              xmlns:vm="clr-namespace:SysManager.Features.SettingsWatchdog"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -64,8 +65,7 @@
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,12,28,0" Padding="14,10"
                 Visibility="{Binding HasBaseline, Converter={StaticResource FlexVis}}">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                           FontSize="15" Foreground="{DynamicResource Success}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <ph:PackIconPhosphorIcons Kind="CheckBold" Width="15" Height="15" Foreground="{DynamicResource Success}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <TextBlock Text="{Binding BaselineTaken}" Foreground="{DynamicResource TextSecondary}"
                            Style="{StaticResource Body}" VerticalAlignment="Center"/>
             </StackPanel>
@@ -78,8 +78,7 @@
             <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width along
                  its orientation, so TextWrapping was inert and this drift notice clipped (#1807). -->
             <DockPanel>
-                <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
-                           FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,10,0"/>
+                <ph:PackIconPhosphorIcons Kind="WarningBold" Width="14" Height="14" DockPanel.Dock="Left" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,10,0"/>
                 <TextBlock Text="Some settings have changed since your baseline. Review them below and restore if they weren't your doing."
                            Foreground="{DynamicResource WarningText}" Style="{StaticResource Body}"
                            VerticalAlignment="Center" TextWrapping="Wrap"/>
@@ -103,7 +102,7 @@
                     </DataGrid.Columns>
                 </DataGrid>
 
-                <v:EmptyState Glyph="&#xE73E;" Title="No changes detected"
+                <v:EmptyState Glyph="CheckBold" Title="No changes detected"
                               Message="Save a baseline, then check back after a Windows update. Any setting that drifted from your baseline will appear here, ready to restore."
                               Visibility="{Binding HasDrift, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
             </Grid>

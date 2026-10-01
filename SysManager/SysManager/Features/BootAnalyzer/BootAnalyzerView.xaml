@@ -77,7 +77,7 @@
                     </DataGrid>
 
                     <!-- Empty state -->
-                    <v:EmptyState Glyph="&#xE946;"
+                    <v:EmptyState Glyph="InfoBold"
                                   Title="No boot records"
                                   Message="Boot history needs administrator to read."
                                   Visibility="{Binding Boots.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
@@ -140,7 +140,7 @@
                     </DataGrid>
 
                     <!-- Empty state -->
-                    <v:EmptyState Glyph="&#xE946;"
+                    <v:EmptyState Glyph="InfoBold"
                                   Title="Nothing slowed boot"
                                   Message="No components were flagged as delaying startup."
                                   Visibility="{Binding Degradations.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

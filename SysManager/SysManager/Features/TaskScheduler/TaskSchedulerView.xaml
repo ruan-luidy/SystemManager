@@ -146,7 +146,7 @@
             </DataGrid>
 
             <!-- Empty state -->
-            <v:EmptyState Glyph="&#xE946;"
+            <v:EmptyState Glyph="InfoBold"
                           Title="{Binding EmptyTitle}"
                           Message="{Binding EmptyMessage}"
                           Visibility="{Binding Tasks.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

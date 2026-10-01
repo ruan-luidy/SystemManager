@@ -117,7 +117,7 @@
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
-                <v:EmptyState Glyph="&#xE838;"
+                <v:EmptyState Glyph="FolderOpenBold"
                               Title="No large files listed yet"
                               Message="Pick a location above and press Scan to list the biggest files it holds."
                               Visibility="{Binding Files.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

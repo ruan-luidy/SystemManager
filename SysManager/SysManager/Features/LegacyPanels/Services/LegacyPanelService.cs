@@ -30,18 +30,18 @@ public sealed class LegacyPanelService
     /// <summary>The fixed catalog of classic applets, grouped logically by order.</summary>
     public static IReadOnlyList<LegacyPanel> Panels { get; } =
     [
-        new("Control Panel", "The classic Control Panel home.", "", "control.exe", ""),
-        new("Sound", "Playback, recording, and sound device settings.", "", "control.exe", "mmsys.cpl"),
-        new("Power Options", "Power plans and sleep/battery behavior.", "", "control.exe", "powercfg.cpl"),
-        new("Network Connections", "Adapter list (ncpa.cpl) — enable, disable, properties.", "", "control.exe", "ncpa.cpl"),
-        new("Region", "Date, time, and regional formats.", "", "control.exe", "intl.cpl"),
-        new("System Properties", "Advanced system settings, performance, environment vars.", "", "SystemPropertiesAdvanced.exe", ""),
-        new("User Accounts", "Classic user account management (netplwiz).", "", "netplwiz.exe", ""),
-        new("Device Manager", "Hardware devices and driver management.", "", "mmc.exe", "devmgmt.msc"),
-        new("Computer Management", "Disks, services, event viewer, and more in one console.", "", "mmc.exe", "compmgmt.msc"),
-        new("Programs and Features", "Classic installed-programs uninstaller (appwiz.cpl).", "", "control.exe", "appwiz.cpl"),
-        new("Mouse", "Pointer, buttons, and wheel settings.", "", "control.exe", "main.cpl"),
-        new("Date and Time", "System clock and time-zone settings.", "", "control.exe", "timedate.cpl"),
+        new("Control Panel", "The classic Control Panel home.", "SlidersBold", "control.exe", ""),
+        new("Sound", "Playback, recording, and sound device settings.", "SpeakerHighBold", "control.exe", "mmsys.cpl"),
+        new("Power Options", "Power plans and sleep/battery behavior.", "LightningBold", "control.exe", "powercfg.cpl"),
+        new("Network Connections", "Adapter list (ncpa.cpl) — enable, disable, properties.", "NetworkBold", "control.exe", "ncpa.cpl"),
+        new("Region", "Date, time, and regional formats.", "GlobeBold", "control.exe", "intl.cpl"),
+        new("System Properties", "Advanced system settings, performance, environment vars.", "DesktopBold", "SystemPropertiesAdvanced.exe", ""),
+        new("User Accounts", "Classic user account management (netplwiz).", "UserBold", "netplwiz.exe", ""),
+        new("Device Manager", "Hardware devices and driver management.", "CpuBold", "mmc.exe", "devmgmt.msc"),
+        new("Computer Management", "Disks, services, event viewer, and more in one console.", "WrenchBold", "mmc.exe", "compmgmt.msc"),
+        new("Programs and Features", "Classic installed-programs uninstaller (appwiz.cpl).", "SquaresFourBold", "control.exe", "appwiz.cpl"),
+        new("Mouse", "Pointer, buttons, and wheel settings.", "MouseBold", "control.exe", "main.cpl"),
+        new("Date and Time", "System clock and time-zone settings.", "ClockBold", "control.exe", "timedate.cpl"),
     ];
 
     /// <summary>

@@ -241,7 +241,7 @@
             </DataGrid>
 
             <!-- Empty state -->
-            <v:EmptyState Glyph="&#xE946;"
+            <v:EmptyState Glyph="InfoBold"
                           Title="No Windows features to show"
                           Message="Nothing matches the current search. Clear it to see every optional feature."
                           Visibility="{Binding FilteredFeatures.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

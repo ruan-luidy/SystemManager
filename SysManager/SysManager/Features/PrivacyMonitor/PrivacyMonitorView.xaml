@@ -61,7 +61,7 @@
                 </DataGrid>
 
                 <!-- Empty state, naming only what could be read (#2503) -->
-                <v:EmptyState Glyph="&#xE730;"
+                <v:EmptyState Glyph="ShieldWarningBold"
                               Title="{Binding EmptyTitle}"
                               Message="{Binding EmptyMessage}"
                               Visibility="{Binding HasEntries, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

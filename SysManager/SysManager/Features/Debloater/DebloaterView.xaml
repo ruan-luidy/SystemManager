@@ -122,7 +122,7 @@
 
                 <!-- Empty state — copy switches from "press Refresh" to "none found" after a
                      scan so it never contradicts the status bar. -->
-                <v:EmptyState Glyph="&#xECAA;"
+                <v:EmptyState Glyph="PackageBold"
                               Title="{Binding EmptyTitle}"
                               Message="{Binding EmptyMessage}"
                               Visibility="{Binding HasApps, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

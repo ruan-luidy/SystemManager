@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Shared.Controls.AdminBanner"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ph="http://metro.mahapps.com/winfx/xaml/iconpacks"
              x:Name="Root">
 
     <!-- The golden admin-control contract, in one place. Every privileged tab must explain WHY
@@ -42,10 +43,8 @@
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
                         AutomationProperties.Name="Run as administrator"
                         AutomationProperties.HelpText="Closes SysManager and opens it again with administrator rights. Windows will ask you to allow it first."/>
-                <TextBlock Text="&#xE83D;" DockPanel.Dock="Left"
-                           FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                           FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextSecondary}"/>
+                <ph:PackIconPhosphorIcons Kind="ShieldBold" Width="16" Height="16" DockPanel.Dock="Left" Margin="0,0,10,0" VerticalAlignment="Center"
+                                          Foreground="{DynamicResource TextSecondary}"/>
                 <TextBlock Text="{Binding NotElevatedMessage, ElementName=Root}"
                            Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Body}"
                            VerticalAlignment="Center" TextWrapping="Wrap"/>
@@ -63,10 +62,8 @@
                         CornerRadius="2" Margin="-12,-8,0,-8"/>
                 <!-- DockPanel for the same reason as above. Three views already used it here. -->
                 <DockPanel Margin="6,0,0,0">
-                    <TextBlock Text="&#xE83D;" DockPanel.Dock="Left"
-                               FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="13" VerticalAlignment="Center"
-                               Foreground="{DynamicResource WarningText}"/>
+                    <ph:PackIconPhosphorIcons Kind="ShieldBold" Width="13" Height="13" DockPanel.Dock="Left" VerticalAlignment="Center"
+                                              Foreground="{DynamicResource WarningText}"/>
                     <TextBlock Text="{Binding ElevatedMessage, ElementName=Root}"
                                Foreground="{DynamicResource WarningText}" Style="{StaticResource Body}" FontWeight="SemiBold"
                                Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>

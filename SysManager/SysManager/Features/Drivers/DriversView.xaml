@@ -123,12 +123,12 @@
                     </DataGrid.Columns>
                 </DataGrid>
                 <!-- Nothing scanned yet, or the only scan so far failed (#2503) -->
-                <v:EmptyState Glyph="&#xE950;"
+                <v:EmptyState Glyph="CpuBold"
                               Title="{Binding EmptyTitle}"
                               Message="{Binding EmptyMessage}"
                               Visibility="{Binding HasNotScanned, Converter={StaticResource FlexVis}}"/>
                 <!-- Scanned, but the filter hid every driver: telling the user to scan again would be wrong. -->
-                <v:EmptyState Glyph="&#xE721;"
+                <v:EmptyState Glyph="MagnifyingGlassBold"
                               Title="No drivers match your filter"
                               Message="Every driver on this PC is supplied by Windows. Untick 'Hide built-in Windows drivers' to see them."
                               Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}"/>

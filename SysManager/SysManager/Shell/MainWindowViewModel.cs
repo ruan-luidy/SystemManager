@@ -383,10 +383,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
 
     private NavGroup[] BuildNavGroups() =>
     [
-        Group("grp-dashboard", "Dashboard", "\uE80F", "How this PC is doing",  // Home
+        Group("grp-dashboard", "Dashboard", "HouseBold", "How this PC is doing",
             EagerItem("nav-dashboard", "Dashboard", typeof(DashboardView), _dashboard ?? Eager<DashboardViewModel>())),
 
-        Group("grp-system", "System", "\uE770", "Updates, startup, repairs, restore points",  // SettingsDisplaySound
+        Group("grp-system", "System", "DesktopBold", "Updates, startup, repairs, restore points",
             Tab<SystemHealthViewModel>("nav-system-health",    "System Health",    typeof(SystemHealthView), keywords: "is my pc ok, disk health, smart, memory test"),
             Tab<WindowsUpdateViewModel>("nav-windows-update",  "Windows Update",   typeof(WindowsUpdateView), keywords: "windows update, updates, patches"),
             Tab<PerformanceViewModel>("nav-performance",       "Performance Mode", typeof(PerformanceView), keywords: "faster, speed up, power plan, high performance"),
@@ -399,20 +399,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             Tab<SystemFixesViewModel>("nav-system-fixes",      "System Fixes",     typeof(SystemFixesView), keywords: "repair windows, sfc, dism, fix errors, broken"),
             Tab<TweaksHubViewModel>("nav-tweaks-hub",          "Tweaks Hub",       typeof(TweaksHubView), inDevelopment: true, keywords: "tweaks, settings, tune windows")),
 
-        Group("grp-gaming", "Gaming & Profiles", "\uE7FC", "Make games run smoother",  // Game
+        Group("grp-gaming", "Gaming & Profiles", "GameControllerBold", "Make games run smoother",
             Tab<GamingProfileViewModel>("nav-gaming-profile",   "Gaming Profile",       typeof(GamingProfileView), inDevelopment: true, keywords: "games, gaming, fps, performance for games"),
             Tab<StandbyMemoryViewModel>("nav-standby-cleaner",  "Standby List Cleaner", typeof(StandbyMemoryView), keywords: "memory, ram, free up, cached, standby"),
             Tab<TimerResolutionViewModel>("nav-timer-resolution", "Timer Resolution",   typeof(TimerResolutionView), keywords: "stutter, lag, smoothness, jitter, frame time"),
             Tab<CpuAffinityViewModel>("nav-cpu-affinity",       "CPU Core Affinity",    typeof(CpuAffinityView), keywords: "cores, processor, pin, assign cpu"),
             Tab<DisplayProfileViewModel>("nav-display-profiles", "Display Profiles",    typeof(DisplayProfileView), keywords: "resolution, refresh rate, monitor, screen")),
 
-        Group("grp-monitor", "Monitor", "\uE9D9", "What is running, and what it is using",  // Diagnostic
+        Group("grp-monitor", "Monitor", "PulseBold", "What is running, and what it is using",
             Tab<ProcessManagerViewModel>("nav-processes",       "Process Manager",    typeof(ProcessManagerView), keywords: "task manager, whats running, end task, cpu usage"),
             Tab<ResourceHistoryViewModel>("nav-resource-history", "Resource History", typeof(ResourceHistoryView), inDevelopment: true, keywords: "cpu history, usage over time, graph"),
             Tab<PrivacyMonitorViewModel>("nav-privacy-monitor", "Camera/Mic/Location", typeof(PrivacyMonitorView), keywords: "webcam, camera, microphone, spying, watching, listening, location"),
             Tab<SettingsWatchdogViewModel>("nav-settings-watchdog", "Settings Watchdog", typeof(SettingsWatchdogView), inDevelopment: true, keywords: "settings changed, something changed my settings")),
 
-        Group("grp-cleanup", "Cleanup", "\uE74D", "Free up space and tidy up",  // Delete
+        Group("grp-cleanup", "Cleanup", "BroomBold", "Free up space and tidy up",
             Tab<CleanupViewModel>("nav-cleanup",                     "Quick Cleanup",         typeof(CleanupView), keywords: "free up space, temp files, junk, disk full"),
             Tab<DeepCleanupViewModel>("nav-deep-cleanup",            "Deep Cleanup",          typeof(DeepCleanupView), keywords: "free up space, disk full, large files, junk"),
             Tab<ShortcutCleanerViewModel>("nav-shortcut-cleaner",    "Shortcut Cleaner",      typeof(ShortcutCleanerView), keywords: "broken shortcuts, dead links, desktop icons"),
@@ -422,7 +422,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // and the group is where someone looks when the errand is about a file (#1521). File Shredder
         // stays in Privacy on purpose \u2014 shredding is a destroy-the-traces intent, and it is the most
         // destructive operation in the app, so it keeps the Privacy group's warning context.
-        Group("grp-storage", "Storage & Files", "\uEDA2", "What fills the disk, what locks a file",  // HardDrive
+        Group("grp-storage", "Storage & Files", "HardDrivesBold", "What fills the disk, what locks a file",
             Tab<DiskAnalyzerViewModel>("nav-disk-analyzer", "Disk Analyzer",      typeof(DiskAnalyzerView), keywords: "what is using my disk, disk full, biggest folders, space"),
             // Between the other two read-only space-analysis tools, which is what it is — it moved out of
             // Deep Cleanup in #1523, where it sat below a scan-and-delete UI and read as part of it.
@@ -430,7 +430,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             Tab<DuplicateFileViewModel>("nav-duplicates",   "Duplicate Finder",   typeof(DuplicateFileView), keywords: "same files, copies, wasted space, identical"),
             Tab<FileLockViewModel>("nav-file-lock",         "File Lock Detector", typeof(FileLockView), keywords: "file in use, cannot delete, locked, in another program")),
 
-        Group("grp-network", "Network", "\uE968", "Test the connection, fix the internet",  // NetworkTower
+        Group("grp-network", "Network", "WifiHighBold", "Test the connection, fix the internet",
             Tab<PingViewModel>("nav-ping",                   "Ping",           typeof(PingView)),
             Tab<TracerouteViewModel>("nav-traceroute",       "Traceroute",     typeof(TracerouteView)),
             Tab<SpeedTestViewModel>("nav-speed-test",        "Speed Test",     typeof(SpeedTestView), keywords: "how fast is my internet, download speed, slow internet"),
@@ -441,13 +441,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             Tab<NetworkRepairViewModel>("nav-network-repair", "Network Repair", typeof(NetworkRepairView), keywords: "no internet, wifi not working, fix connection"),
             Tab<DnsHostsViewModel>("nav-dns-hosts", "DNS & Hosts", typeof(DnsHostsView), keywords: "dns, block websites, hosts file, faster browsing")),
 
-        Group("grp-apps", "Apps", "\uE71D", "Install, update, remove and catch new installs",  // AllApps
+        Group("grp-apps", "Apps", "SquaresFourBold", "Install, update, remove and catch new installs",
             Tab<AppUpdatesViewModel>("nav-app-updates",    "App Updates",    typeof(AppUpdatesView), keywords: "update apps, out of date programs"),
             Tab<BulkInstallerViewModel>("nav-bulk-installer", "Bulk Installer", typeof(BulkInstallerView), keywords: "install apps, set up new pc, install several"),
             Tab<AppAlertsViewModel>("nav-app-alerts",      "New App Alerts", typeof(AppAlertsView), keywords: "something installed itself, new programs, unwanted install"),
             Tab<UninstallerViewModel>("nav-uninstaller",   "Uninstaller",    typeof(UninstallerView), keywords: "remove program, uninstall, get rid of")),
 
-        Group("grp-privacy", "Privacy & Security", "\uE72E", "Tracking, ads and preinstalled apps",  // Lock
+        Group("grp-privacy", "Privacy & Security", "LockBold", "Tracking, ads and preinstalled apps",
             Tab<PrivacyViewModel>("nav-privacy-settings",  "Privacy & Telemetry",   typeof(PrivacyView), keywords: "telemetry, tracking, stop microsoft watching, advertising id, ads, adverts, suggestions, tips, spotlight"),
             Tab<FileShredderViewModel>("nav-file-shredder", "File Shredder",         typeof(FileShredderView), keywords: "delete for good, wipe, unrecoverable, erase"),
             Tab<AppBlockerViewModel>("nav-app-blocker",     "App Blocker",           typeof(AppBlockerView), keywords: "block program, stop app running, prevent"),
@@ -456,7 +456,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             Tab<EdgeOneDriveViewModel>("nav-edge-onedrive", "Edge/OneDrive Remover", typeof(EdgeOneDriveView), keywords: "remove edge, remove onedrive, uninstall microsoft apps"),
             Tab<DefenderViewModel>("nav-defender-tweaks",   "Defender Tweaks",       typeof(DefenderView), keywords: "antivirus, defender, virus protection")),
 
-        Group("grp-customization", "Customization", "\uE790", "Right-click menu, dark mode, volume",  // Personalize
+        Group("grp-customization", "Customization", "PaletteBold", "Right-click menu, dark mode, volume",
             Tab<ContextMenuViewModel>("nav-context-menu",   "Context Menu",          typeof(ContextMenuView), keywords: "right click, menu, shell, explorer menu"),
             // DarkMode is eager (schedule poll must run app-wide); hand the DI singleton to its NavItem.
             EagerItem("nav-dark-mode", "Dark Mode Scheduler", typeof(DarkModeView), Eager<DarkModeViewModel>(),
@@ -469,7 +469,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             // REMOVES software; this only silences it.
             Tab<NotificationBlockerViewModel>("nav-notification-blocker", "Notification Blocker", typeof(NotificationBlockerView), inDevelopment: true, keywords: "popups, notifications, nagging, alerts, stop bothering me")),
 
-        Group("grp-info", "Info", "\uE946", "Drivers, battery, logs and reports",  // Info
+        Group("grp-info", "Info", "InfoBold", "Drivers, battery, logs and reports",
             Tab<DriversViewModel>("nav-drivers",       "Drivers",        typeof(DriversView), keywords: "drivers, hardware, devices"),
             Tab<BatteryHealthViewModel>("nav-battery", "Battery Health", typeof(BatteryHealthView), keywords: "battery, laptop battery, wear, charge"),
             Tab<LogsViewModel>("nav-logs",             "System Logs",    typeof(LogsView), keywords: "event log, errors, crashes, what went wrong"),
@@ -479,21 +479,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             // that same instance so the sidebar version label and the tab show one shared VM.
             EagerItem("nav-about", "About", typeof(AboutView), About)),
 
-        Group("grp-advanced", "Advanced", "\uE713", "Command line and portable settings",  // Settings
+        Group("grp-advanced", "Advanced", "GearSixBold", "Command line and portable settings",
             Tab<ProfileViewModel>("nav-profile-export", "Profile Export / Import", typeof(ProfileView), keywords: "backup settings, move to new pc, export"),
             Tab<CliInterfaceViewModel>("nav-cli-interface", "CLI Interface",     typeof(CliInterfaceView), inDevelopment: true, keywords: "command line, terminal, script, cli"),
             Tab<EnvironmentVariablesViewModel>("nav-env-variables", "Environment Variables", typeof(EnvironmentVariablesView), keywords: "path, variables, environment")),
     ];
 
     /// <summary>
-    /// Builds a sidebar group. <paramref name="glyph"/> is a Segoe Fluent Icons codepoint, drawn on the
-    /// group header and — for a single-item group — on its flat row. <paramref name="subtitle"/> is the
-    /// line printed under the label while the group is collapsed.
+    /// Builds a sidebar group. <paramref name="glyph"/> is the name of a Phosphor icon
+    /// (<c>PackIconPhosphorIconsKind</c>), drawn on the group header and — for a single-item group — on its
+    /// flat row. <paramref name="subtitle"/> is the line printed under the label while the group is collapsed.
     /// </summary>
     /// <remarks>
-    /// Every codepoint used here was checked against the installed font files, not chosen from a list:
-    /// each is present in BOTH Segoe Fluent Icons and Segoe MDL2 Assets, because the app falls back to
-    /// MDL2 on Windows 10 and a codepoint missing from it renders as an empty box.
+    /// The icons ship inside the app, so they look the same on Windows 10 and 11; the Segoe icon fonts they
+    /// replaced differ between the two and a codepoint missing from MDL2 rendered as an empty box.
     /// <para>The subtitle is written, not generated. It used to be every child label joined with " · ",
     /// which for System came to 175 characters in a slot about 26 characters wide: two of eleven tabs
     /// survived the ellipsis, and the same was true of ten other groups. It also answered the wrong
