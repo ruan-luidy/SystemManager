@@ -25,7 +25,7 @@
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
             <TextBlock Text="Dark Mode Scheduler" Style="{StaticResource Display}"/>
             <TextBlock Text="Switch the Windows light/dark theme, or have it follow a schedule. The schedule runs while SysManager (or its tray) is open."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Manual switch -->

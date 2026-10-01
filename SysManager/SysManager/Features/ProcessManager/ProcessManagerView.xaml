@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Features.ProcessManager.ProcessManagerView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ph="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:SysManager.Features.ProcessManager"
              xmlns:v="clr-namespace:SysManager.Shared.Controls"
              d:DataContext="{d:DesignInstance vm:ProcessManagerViewModel}"
@@ -24,7 +25,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Process Manager" Style="{StaticResource Display}"/>
             <TextBlock Text="View running processes, sort by clicking column headers, and kill unresponsive apps."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->
@@ -258,9 +259,6 @@
                                 <Border CornerRadius="{StaticResource RadiusMd}" Padding="8,4" VerticalAlignment="Center"
                                         Background="{DynamicResource Surface3}" BorderThickness="1" BorderBrush="{DynamicResource Border1}">
                                     <Grid>
-                                        <Border Width="3" HorizontalAlignment="Left" CornerRadius="2"
-                                                Margin="-8,-4,0,-4"
-                                                Background="{Binding Status, Converter={StaticResource StatusBrush}}"/>
                                         <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
                                             <Ellipse Width="6" Height="6" VerticalAlignment="Center"
                                                      Fill="{Binding Status, Converter={StaticResource StatusBrush}}"/>
@@ -363,12 +361,14 @@
                                          as "this screen is dangerous" instead of "this button is". The
                                          style fills solid red on hover, so it matches every other
                                          destructive action the moment the pointer is on it. -->
-                                    <Button Content="X" ToolTip="Kill process"
+                                    <Button ToolTip="Kill process"
                                             AutomationProperties.Name="{Binding Name, StringFormat='Kill {0}'}"
                                             AutomationProperties.HelpText="Ends this program straight away, losing anything it has not saved. SysManager asks you to confirm first."
                                             Command="{Binding DataContext.KillProcessCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
-                                            Style="{StaticResource DangerGhostButton}" Padding="6,2" FontSize="12"/>
+                                            Style="{StaticResource DangerGhostButton}" Padding="6,2">
+                                        <ph:PackIconPhosphorIcons Kind="XBold" Width="12" Height="12"/>
+                                    </Button>
                                 </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>

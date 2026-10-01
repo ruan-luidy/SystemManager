@@ -27,7 +27,7 @@
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
             <TextBlock Text="Standby List Cleaner" Style="{StaticResource Display}"/>
             <TextBlock Text="Free cached standby memory to reduce stutter when RAM runs low. Safe — cached data is reloaded from disk on next use; nothing is lost."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->

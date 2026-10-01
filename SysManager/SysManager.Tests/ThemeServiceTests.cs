@@ -76,7 +76,7 @@ public class ThemeServiceTests : IDisposable
         var svc = new ThemeService(_dir);   // empty temp dir, no theme.json
         svc.Initialize();
 
-        Assert.Equal("midnight-indigo", svc.CurrentPresetId);
+        Assert.Equal("graphite", svc.CurrentPresetId);
         Assert.False(File.Exists(ThemeFile), "Initialize must not create a file when none exists");
     }
 
@@ -290,8 +290,8 @@ public class ThemeServiceTests : IDisposable
     // ---------- following the Windows light/dark setting (#1631) ----------
 
     [Theory]
-    [InlineData(true, "midnight-indigo")]
-    [InlineData(false, "clean-indigo")]
+    [InlineData(true, "graphite")]
+    [InlineData(false, "graphite-light")]
     public void FollowWindows_ResolvesTheArmWindowsIsOn(bool windowsIsDark, string expected)
     {
         var svc = new ThemeService(_dir, () => windowsIsDark);
@@ -351,7 +351,7 @@ public class ThemeServiceTests : IDisposable
         reloaded.Initialize();
 
         Assert.Equal(ThemeService.AutoMode, reloaded.CurrentMode);
-        Assert.Equal("clean-indigo", reloaded.CurrentPresetId);
+        Assert.Equal("graphite-light", reloaded.CurrentPresetId);
         Assert.False(reloaded.CurrentTheme.IsDark);
     }
 

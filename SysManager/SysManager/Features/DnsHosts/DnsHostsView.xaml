@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Features.DnsHosts.DnsHostsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ph="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:v="clr-namespace:SysManager.Shared.Controls">
     <Grid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
@@ -15,7 +16,7 @@
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="DNS &amp; Hosts" Style="{StaticResource Display}"/>
             <TextBlock Text="Point your PC at a faster or more private DNS server — the service that turns a website's name into an address — and block a site by adding it to the hosts file. Both are reversible: Restore puts back the DNS you had, and the hosts file is backed up before every save."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->
@@ -133,11 +134,13 @@
                         <DataGridTemplateColumn Header="" Width="60" MinWidth="60" CanUserResize="False">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Button Content="X" Command="{Binding DataContext.RemoveEntryCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                    <Button Command="{Binding DataContext.RemoveEntryCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                             CommandParameter="{Binding}"
                                             Style="{StaticResource SecondaryButton}"
-                                            Padding="6,2" FontSize="10" VerticalAlignment="Center"
-                                            AutomationProperties.Name="{Binding Hostname, StringFormat='Remove host entry {0}'}"/>
+                                            Padding="6,2" VerticalAlignment="Center"
+                                            AutomationProperties.Name="{Binding Hostname, StringFormat='Remove host entry {0}'}">
+                                        <ph:PackIconPhosphorIcons Kind="XBold" Width="10" Height="10"/>
+                                    </Button>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

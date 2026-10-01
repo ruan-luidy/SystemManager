@@ -24,7 +24,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Disk Analyzer" Style="{StaticResource Display}"/>
             <TextBlock Text="See which folders use the most space. Read-only — nothing is modified."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0"/>
         </StackPanel>
 
         <!-- Toolbar -->

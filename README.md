@@ -2163,7 +2163,7 @@ and elevation state in a format ready to paste into a bug report.
 - .NET 10 (WPF, C# 14)
 - CommunityToolkit.Mvvm for MVVM plumbing
 - Microsoft.Extensions.DependencyInjection for IoC
-- WPF-UI (lepoco/wpfui) for Fluent Design theme and controls
+- HandyControl (HandyControls) for the base theme and controls
 - LiveCharts2 for the real-time latency chart
 - Phosphor Icons (MahApps.Metro.IconPacks.PhosphorIcons) for the icons
 - H.NotifyIcon.Wpf for system tray integration

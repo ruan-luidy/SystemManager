@@ -25,7 +25,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Bulk Installer" Style="{StaticResource Display}"/>
             <TextBlock Text="Set a PC up in one pass: tick the programs you want and install them together through winget — Microsoft's own App Installer, already part of Windows. Each program is downloaded from its own publisher."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->

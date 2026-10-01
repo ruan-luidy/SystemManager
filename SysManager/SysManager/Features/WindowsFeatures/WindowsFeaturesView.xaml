@@ -24,7 +24,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Windows Features" Style="{StaticResource Display}"/>
             <TextBlock Text="Enable or disable Windows optional features. Requires administrator privileges."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0"/>
         </StackPanel>
 
         <!-- Toolbar -->
@@ -173,25 +173,6 @@
                                         </Style>
                                     </Border.Style>
                                     <Grid>
-                                        <Border Width="3" HorizontalAlignment="Left" CornerRadius="2"
-                                                Margin="-8,-4,0,-4">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="{DynamicResource TextMuted}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Done">
-                                                            <Setter Property="Background" Value="{DynamicResource Success}"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Failed">
-                                                            <Setter Property="Background" Value="{DynamicResource Danger}"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Reboot required">
-                                                            <Setter Property="Background" Value="{DynamicResource Warning}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                        </Border>
                                         <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
                                             <Ellipse Width="6" Height="6" VerticalAlignment="Center">
                                                 <Ellipse.Style>

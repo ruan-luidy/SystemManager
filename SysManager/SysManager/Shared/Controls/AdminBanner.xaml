@@ -24,8 +24,8 @@
          nothing. -->
     <Grid>
         <!-- Not elevated: say what is locked, and offer the one button that unlocks it. -->
-        <Border Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
-                BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,8"
+        <Border Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border1}"
+                BorderThickness="1" CornerRadius="{StaticResource RadiusMd}" Padding="10,6"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <!-- DockPanel, not a horizontal StackPanel: the message is the last child, so it fills the
                  remaining width and TextWrapping actually wraps. Inside a horizontal StackPanel the child
@@ -40,7 +40,7 @@
                      purpose — this one control serves all 30 privileged tabs, and NotElevatedMessage is
                      already where the per-tab "why" lives. -->
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
-                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"
+                        Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="10,4"
                         AutomationProperties.Name="Run as administrator"
                         AutomationProperties.HelpText="Closes SysManager and opens it again with administrator rights. Windows will ask you to allow it first."/>
                 <ph:PackIconPhosphorIcons Kind="ShieldBold" Width="16" Height="16" DockPanel.Dock="Left" Margin="0,0,10,0" VerticalAlignment="Center"
@@ -55,11 +55,11 @@
              through the parent's 12,8 padding to the border edge; it is tied to that padding, which is
              one more reason both live here rather than in 30 copies. -->
         <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
-                BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,8"
+                BorderThickness="1" CornerRadius="{StaticResource RadiusMd}" Padding="10,6"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
             <Grid>
                 <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left"
-                        CornerRadius="2" Margin="-12,-8,0,-8"/>
+                        CornerRadius="2" Margin="-10,-6,0,-6"/>
                 <!-- DockPanel for the same reason as above. Three views already used it here. -->
                 <DockPanel Margin="6,0,0,0">
                     <ph:PackIconPhosphorIcons Kind="ShieldBold" Width="13" Height="13" DockPanel.Dock="Left" VerticalAlignment="Center"

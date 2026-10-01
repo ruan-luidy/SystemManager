@@ -13,7 +13,7 @@
                     <StackPanel>
                         <TextBlock Text="System Health" Style="{StaticResource Display}"/>
                         <TextBlock Text="One page for what this PC is made of and how it is holding up: Windows version, processor, memory and drives, including each drive's own self-check (SMART). Everything here reads rather than changes, with one exception — the memory test, which Windows runs on the next restart once you schedule it."
-                                   Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                   Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
                     <Button Content="Scan" Command="{Binding ScanCommand}" Style="{StaticResource PrimaryButton}"
                             AutomationProperties.AutomationId="btn-system-health-scan"

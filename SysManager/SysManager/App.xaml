@@ -3,14 +3,18 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ph="http://metro.mahapps.com/winfx/xaml/iconpacks"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
              xmlns:h="clr-namespace:SysManager.Shared.Helpers"
              StartupUri="Shell/MainWindow.xaml">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ui:ThemesDictionary Theme="Dark" />
-                <ui:ControlsDictionary />
+                <!-- HandyControl gives every control without a style of its own here (lists, menus, group
+                     boxes, date pickers...) a dark theme. ThemeService switches it to light with the preset
+                     and points its brushes (RegionBrush, PrimaryBrush, BorderBrush, the text brushes) at
+                     the preset's colours, so those controls follow the theme like everything else. -->
+                <hc:ThemeResources AccentColor="#3473B8" RequestedTheme="Dark" />
+                <hc:Theme />
             </ResourceDictionary.MergedDictionaries>
 
             <!-- ============================================================ -->
@@ -46,14 +50,14 @@
             <sys:Boolean xmlns:sys="clr-namespace:System;assembly=mscorlib" x:Key="FalseValue">False</sys:Boolean>
 
             <!-- ============================================================ -->
-            <!-- Color palette — 2026 dark design                              -->
+            <!-- Color palette — Graphite (the default preset)                 -->
             <!-- ============================================================ -->
             <!-- Surfaces (layered backgrounds, darkest → lightest)            -->
-            <Color x:Key="Surface0Color">#070A0F</Color>
-            <Color x:Key="Surface1Color">#0E1218</Color>
-            <Color x:Key="Surface2Color">#151A23</Color>
-            <Color x:Key="Surface3Color">#1C2230</Color>
-            <Color x:Key="Surface4Color">#252C3C</Color>
+            <Color x:Key="Surface0Color">#111113</Color>
+            <Color x:Key="Surface1Color">#1C1C1E</Color>
+            <Color x:Key="Surface2Color">#232326</Color>
+            <Color x:Key="Surface3Color">#2C2C2F</Color>
+            <Color x:Key="Surface4Color">#363639</Color>
 
             <SolidColorBrush x:Key="Surface0" Color="{DynamicResource Surface0Color}"/>
             <SolidColorBrush x:Key="Surface1" Color="{DynamicResource Surface1Color}"/>
@@ -62,44 +66,38 @@
             <SolidColorBrush x:Key="Surface4" Color="{DynamicResource Surface4Color}"/>
 
             <!-- Borders -->
-            <SolidColorBrush x:Key="Border1" Color="#1F2633"/>
-            <SolidColorBrush x:Key="Border2" Color="#2A3244"/>
-            <SolidColorBrush x:Key="BorderAccent" Color="#3B4A66"/>
+            <SolidColorBrush x:Key="Border1" Color="#333338"/>
+            <SolidColorBrush x:Key="Border2" Color="#414146"/>
+            <SolidColorBrush x:Key="BorderAccent" Color="#333F51"/>
 
-            <!-- Card depth brushes — static dark-preset fallbacks so cards never flash a null brush
-                 before ThemeService.Apply() replaces them per preset at startup (see ThemeService.Apply). -->
-            <LinearGradientBrush x:Key="CardSurface" StartPoint="0.5,0" EndPoint="0.5,1">
-                <GradientStop Color="#12161E" Offset="0"/>
-                <GradientStop Color="#0E1218" Offset="0.55"/>
-            </LinearGradientBrush>
-            <LinearGradientBrush x:Key="CardRim" StartPoint="0.5,0" EndPoint="0.5,1">
-                <GradientStop Color="#33405A" Offset="0"/>
-                <GradientStop Color="#1F2633" Offset="0.5"/>
-            </LinearGradientBrush>
+            <!-- Card brushes — static fallbacks so cards never flash a null brush before
+                 ThemeService.Apply() replaces them per preset at startup (see ThemeService.Apply). -->
+            <SolidColorBrush x:Key="CardSurface" Color="#1C1C1E"/>
+            <SolidColorBrush x:Key="CardRim" Color="#333338"/>
             <!-- Neutral row-hover, distinct from accent selection. Dark fallback; ThemeService derives per preset.
-                 #303439 is Lerp(Surface, TextPrimary, 0.15) for this default palette — 1.50:1 against the
+                 #3A3A3C is Lerp(Surface, TextPrimary, 0.15) for this default palette — 1.50:1 against the
                  surface, where the 0.05 it shipped with measured 1.11:1 and was below the perceptual
                  threshold (#1540). -->
-            <SolidColorBrush x:Key="RowHover" Color="#303439"/>
+            <SolidColorBrush x:Key="RowHover" Color="#3A3A3C"/>
             <!-- The 3px bar on a hovered sidebar row, which is what carries the contrast: 6.41:1 here, where
                  no background tint on a dark theme can reach 3:1. NEUTRAL on purpose — the selected row's
                  bar in the same position is Accent, and reusing it would make hover look like selection. -->
-            <SolidColorBrush x:Key="RowHoverMark" Color="#9097A7"/>
+            <SolidColorBrush x:Key="RowHoverMark" Color="#A0A0A8"/>
 
             <!-- Text -->
-            <SolidColorBrush x:Key="TextPrimary" Color="#F1F3F7"/>
-            <SolidColorBrush x:Key="TextSecondary" Color="#A3ADBF"/>
-            <SolidColorBrush x:Key="TextMuted" Color="#7B8396"/>
-            <SolidColorBrush x:Key="TextDisabled" Color="#4A5266"/>
+            <SolidColorBrush x:Key="TextPrimary" Color="#E6E6E8"/>
+            <SolidColorBrush x:Key="TextSecondary" Color="#B4B4BC"/>
+            <SolidColorBrush x:Key="TextMuted" Color="#A0A0A8"/>
+            <SolidColorBrush x:Key="TextDisabled" Color="#67676C"/>
 
             <!-- Accent (primary action) -->
-            <Color x:Key="AccentColor">#6366F1</Color>
-            <Color x:Key="AccentHoverColor">#818CF8</Color>
-            <Color x:Key="AccentPressedColor">#4F46E5</Color>
+            <Color x:Key="AccentColor">#3473B8</Color>
+            <Color x:Key="AccentHoverColor">#528AC6</Color>
+            <Color x:Key="AccentPressedColor">#2E65A2</Color>
             <SolidColorBrush x:Key="Accent" Color="{DynamicResource AccentColor}"/>
             <SolidColorBrush x:Key="AccentHover" Color="{DynamicResource AccentHoverColor}"/>
             <SolidColorBrush x:Key="AccentPressed" Color="{DynamicResource AccentPressedColor}"/>
-            <SolidColorBrush x:Key="AccentSoft" Color="#186366F1"/>
+            <SolidColorBrush x:Key="AccentSoft" Color="#183473B8"/>
 
             <!-- Status colors -->
             <SolidColorBrush x:Key="Success" Color="#22C55E"/>
@@ -239,7 +237,7 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="Expander">
                             <DockPanel LastChildFill="True">
-                                <ToggleButton x:Name="HeaderSite" DockPanel.Dock="Top"
+                                <ToggleButton x:Name="HeaderSite" DockPanel.Dock="Top" Style="{x:Null}"
                                               IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
                                               Content="{TemplateBinding Header}"
                                               ContentTemplate="{TemplateBinding HeaderTemplate}"
@@ -369,17 +367,124 @@
             </Style>
 
             <!-- ============================================================ -->
+            <!-- Scroll bars — thin, no arrows                                  -->
+            <!-- ============================================================ -->
+            <!-- The page scrolls a lot, and the default bar with its arrows was the heaviest thing on the
+                 right edge of every tab. The thumb takes its colours from the theme, so it reads on the
+                 light presets too. -->
+            <Style x:Key="ScrollThumb" TargetType="Thumb">
+                <Setter Property="OverridesDefaultStyle" Value="True"/>
+                <Setter Property="IsTabStop" Value="False"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border x:Name="Bar" Background="{DynamicResource Surface4}"
+                                    CornerRadius="{StaticResource RadiusSm}" SnapsToDevicePixels="True"/>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bar" Property="Background" Value="{DynamicResource TextMuted}"/>
+                                </Trigger>
+                                <Trigger Property="IsDragging" Value="True">
+                                    <Setter TargetName="Bar" Property="Background" Value="{DynamicResource TextSecondary}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style TargetType="ScrollBar">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Width" Value="10"/>
+                <Setter Property="MinWidth" Value="10"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid Background="{TemplateBinding Background}">
+                                <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                    <Track.Thumb>
+                                        <Thumb Margin="2,0" Style="{StaticResource ScrollThumb}"/>
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Style="{x:Null}"/>
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Style="{x:Null}"/>
+                                    </Track.DecreaseRepeatButton>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <Trigger Property="Orientation" Value="Horizontal">
+                        <Setter Property="Width" Value="Auto"/>
+                        <Setter Property="MinWidth" Value="0"/>
+                        <Setter Property="Height" Value="10"/>
+                        <Setter Property="MinHeight" Value="10"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ScrollBar">
+                                    <Grid Background="{TemplateBinding Background}">
+                                        <Track x:Name="PART_Track">
+                                            <Track.Thumb>
+                                                <Thumb Margin="0,2" Style="{StaticResource ScrollThumb}"/>
+                                            </Track.Thumb>
+                                            <Track.IncreaseRepeatButton>
+                                                <RepeatButton Command="ScrollBar.PageRightCommand" Opacity="0" Style="{x:Null}"/>
+                                            </Track.IncreaseRepeatButton>
+                                            <Track.DecreaseRepeatButton>
+                                                <RepeatButton Command="ScrollBar.PageLeftCommand" Opacity="0" Style="{x:Null}"/>
+                                            </Track.DecreaseRepeatButton>
+                                        </Track>
+                                    </Grid>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- Context menu: HandyControl's, opening with a short grow-in instead of popping. -->
+            <Style TargetType="ContextMenu" BasedOn="{StaticResource ContextMenuBaseStyle}">
+                <Setter Property="RenderTransformOrigin" Value="0.5,0"/>
+                <Setter Property="Opacity" Value="0"/>
+                <Setter Property="RenderTransform">
+                    <Setter.Value>
+                        <ScaleTransform ScaleX="0.96" ScaleY="0.96"/>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <EventTrigger RoutedEvent="Loaded">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1" Duration="0:0:0.13">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut"/>
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1" Duration="0:0:0.13">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut"/>
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.13"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- ============================================================ -->
             <!-- Card — reusable container                                      -->
             <!-- ============================================================ -->
-            <!-- Card — the primary content surface. Background + border are theme-derived depth
-                 brushes (CardSurface = top sheen fading to Surface1; CardRim = top-lit hairline
-                 fading to Border1), built by ThemeService per preset. Pure gradients, no shadow
-                 (PERF-008-safe on repeated cards). This is the revamp's signature "glass depth". -->
+            <!-- Card — the primary content surface. Flat: CardSurface is Surface1 and CardRim is
+                 Border1, set by ThemeService per preset. No shadow (PERF-008-safe on repeated cards). -->
             <Style x:Key="Card" TargetType="Border">
                 <Setter Property="Background" Value="{DynamicResource CardSurface}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource CardRim}"/>
                 <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}"/>
+                <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}"/>
                 <Setter Property="Padding" Value="16"/>
                 <Setter Property="SnapsToDevicePixels" Value="True"/>
             </Style>
@@ -390,7 +495,7 @@
                  and follows the same rule. -->
             <Style x:Key="CardInner" TargetType="Border" BasedOn="{StaticResource Card}">
                 <Setter Property="Background" Value="{DynamicResource Surface2}"/>
-                <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}"/>
+                <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}"/>
                 <Setter Property="Padding" Value="12"/>
             </Style>
 
@@ -400,9 +505,9 @@
             <Style x:Key="ButtonBase" TargetType="Button">
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
                 <Setter Property="FontSize" Value="13"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="FontWeight" Value="Medium"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-                <Setter Property="Padding" Value="14,8"/>
+                <Setter Property="Padding" Value="12,6"/>
                 <!-- A floor on the clickable box, not on the layout. Nothing here set one, so a button's
                      size was purely padding plus content.
 
@@ -439,18 +544,18 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="{StaticResource RadiusMd}"
+                                    CornerRadius="{StaticResource RadiusSm}"
                                     Padding="{TemplateBinding Padding}">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   TextBlock.Foreground="{TemplateBinding Foreground}"/>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Opacity" Value="0.88"/>
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BorderAccent}"/>
+                                    <Setter TargetName="Bd" Property="Opacity" Value="0.9"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Border2}"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="Bd" Property="Opacity" Value="0.75"/>
+                                    <Setter TargetName="Bd" Property="Opacity" Value="0.8"/>
                                 </Trigger>
                                 <Trigger Property="IsKeyboardFocused" Value="True">
                                     <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
@@ -474,8 +579,8 @@
 
             <!-- Secondary: subtle surface with border -->
             <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
-                <Setter Property="Background" Value="{DynamicResource Surface3}"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource Border2}"/>
+                <Setter Property="Background" Value="{DynamicResource Surface2}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource Border1}"/>
                 <Setter Property="BorderThickness" Value="1"/>
             </Style>
 
@@ -490,7 +595,7 @@
                             <!-- Border uses the theme-adaptive Border1/Border2 brushes (updated per
                                  preset by ThemeService.Apply) instead of hardcoded translucent white,
                                  which was invisible on the six light presets (white border on white). -->
-                            <Border x:Name="Bd" Background="Transparent" CornerRadius="{StaticResource RadiusMd}"
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="{StaticResource RadiusSm}"
                                     Padding="{TemplateBinding Padding}"
                                     BorderThickness="1" BorderBrush="{DynamicResource Border1}">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -566,7 +671,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="Bd" Background="Transparent" CornerRadius="{StaticResource RadiusMd}"
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="{StaticResource RadiusSm}"
                                     Padding="{TemplateBinding Padding}"
                                     BorderThickness="1" BorderBrush="{DynamicResource Danger}">
                                 <ContentPresenter x:Name="Cp" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -801,17 +906,14 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="Bd" CornerRadius="{StaticResource RadiusMd}" Padding="{TemplateBinding Padding}"
-                                    Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningStripe}" BorderThickness="1">
-                                <Grid>
-                                    <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
-                                            Margin="-14,-8,0,-8" x:Name="Bar"/>
-                                    <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
-                                        <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
-                                        <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"
-                                                          TextBlock.Foreground="{DynamicResource WarningText}" TextBlock.FontWeight="SemiBold"/>
-                                    </StackPanel>
-                                </Grid>
+                            <Border x:Name="Bd" CornerRadius="{StaticResource RadiusSm}" Padding="{TemplateBinding Padding}"
+                                    Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBorder}" BorderThickness="1">
+                                <StackPanel Orientation="Horizontal">
+                                    <ph:PackIconPhosphorIcons Kind="ShieldBold" Width="13" Height="13" VerticalAlignment="Center"
+                                                              Foreground="{DynamicResource WarningText}"/>
+                                    <ContentPresenter Margin="7,0,0,0" VerticalAlignment="Center"
+                                                      TextBlock.Foreground="{DynamicResource WarningText}" TextBlock.FontWeight="Medium"/>
+                                </StackPanel>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
@@ -853,7 +955,7 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="{StaticResource RadiusMd}"
+                                    CornerRadius="{StaticResource RadiusSm}"
                                     Padding="{TemplateBinding Padding}">
                                 <ContentPresenter x:Name="Cp" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   TextBlock.Foreground="{TemplateBinding Foreground}"/>
@@ -902,7 +1004,7 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="{StaticResource RadiusMd}">
+                                    CornerRadius="{StaticResource RadiusSm}">
                                 <ScrollViewer x:Name="PART_ContentHost"
                                               Padding="{TemplateBinding Padding}"
                                               VerticalAlignment="Center"/>
@@ -955,7 +1057,7 @@
                                         Background="{TemplateBinding Background}"
                                         BorderBrush="{TemplateBinding BorderBrush}"
                                         BorderThickness="{TemplateBinding BorderThickness}"
-                                        CornerRadius="{StaticResource RadiusMd}">
+                                        CornerRadius="{StaticResource RadiusSm}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1047,7 +1149,7 @@
             </Style>
 
             <!-- ============================================================ -->
-            <!-- Slider — theme-aware track (default template inherits WPF-UI's  -->
+            <!-- Slider — theme-aware track (the library default is a fixed      -->
             <!-- dark dictionary; its pale rail vanished on the light presets,   -->
             <!-- leaving the thumb floating). Drives every colour from theme     -->
             <!-- brushes and keeps the PART_Track/PART_SelectionRange/Thumb part -->
@@ -1114,7 +1216,7 @@
             </Style>
 
             <!-- ============================================================ -->
-            <!-- ToolTip — theme-aware surface (default inherits WPF-UI's dark   -->
+            <!-- ToolTip — theme-aware surface (the library default is a fixed   -->
             <!-- chrome; the tooltip text DID re-theme via the TextBlock style,  -->
             <!-- so on light presets it was dark text on a dark panel). Drives   -->
             <!-- both surface and text from theme brushes so they invert together.-->
@@ -1145,7 +1247,7 @@
             <!-- Typography helpers                                            -->
             <!-- ============================================================ -->
             <Style x:Key="Display" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="28"/>
+                <Setter Property="FontSize" Value="22"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>

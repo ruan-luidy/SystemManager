@@ -20,7 +20,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Legacy Panels" Style="{StaticResource Display}"/>
             <TextBlock Text="Open the classic Windows applets that newer releases keep hiding — one click each. These just open the built-in panel; they don't change anything themselves."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Panel cards -->

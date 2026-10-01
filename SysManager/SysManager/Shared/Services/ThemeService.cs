@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using HandyControl.Themes;
 using Microsoft.Win32;
 using Serilog;
 using SysManager.Shared.Helpers;
@@ -35,7 +36,7 @@ public sealed class ThemeService
     /// <see cref="ResetToDefault"/>, and the slider's own default in <c>ThemePopup.xaml</c>. They were three
     /// copies of the same two values.
     /// </remarks>
-    public const string DefaultPresetId = "midnight-indigo";
+    public const string DefaultPresetId = "graphite";
 
     /// <inheritdoc cref="DefaultPresetId"/>
     public const double DefaultShade = 0.5;
@@ -56,6 +57,7 @@ public sealed class ThemeService
 
     private static readonly Dictionary<string, string> DarkToLight = new()
     {
+        ["graphite"] = "graphite-light",
         ["midnight-indigo"] = "clean-indigo",
         ["deep-ocean"] = "sky-breeze",
         ["dark-forest"] = "mint-fresh",
@@ -154,7 +156,7 @@ public sealed class ThemeService
             return darkId;
         if (targetMode == "light" && DarkToLight.TryGetValue(CurrentPresetId, out var lightId))
             return lightId;
-        return targetMode == "dark" ? "midnight-indigo" : "clean-indigo";
+        return targetMode == "dark" ? "graphite" : "graphite-light";
     }
 
     public void SetPreset(string id)
@@ -519,18 +521,11 @@ public sealed class ThemeService
         SetColor(res, "AccentHoverColor", Lighten(theme.Accent, 0.15));
         SetColor(res, "AccentPressedColor", Darken(theme.Accent, 0.12));
 
-        // Card depth (the revamp's signature "glass depth"): a subtle top sheen + a top-lit rim.
-        // Both are theme-DERIVED so they survive all 12 presets + custom + shade, and both are pure
-        // gradient fills (no DropShadowEffect) so they stay PERF-008-safe on the many repeated cards.
-        //  - Sheen: a vertical gradient whose top is a hair lifted off the surface, fading to the flat
-        //    surface by 55% — reads as "lit from above". Lifted on dark, tinted-down on light, matching
-        //    the approved mockup's cardgrad (white-alpha on dark / dark-alpha on light).
-        //  - Rim: a vertical border gradient, brighter/darker at the very top (Lerp toward TextPrimary)
-        //    fading to the normal border by mid-height — the 1px contour highlight without a shadow.
-        var sheenTop = theme.IsDark ? Lighten(theme.Surface, 0.05) : Darken(theme.Surface, 0.02);
-        SetBrush(res, "CardSurface", VGradient((sheenTop, 0.0), (theme.Surface, 0.55)));
-        var rim = Lerp(theme.Border, theme.TextPrimary, 0.22);
-        SetBrush(res, "CardRim", VGradient((rim, 0.0), (theme.Border, 0.5)));
+        // Cards are flat: the surface colour with a 1px border, no sheen and no lit rim. The page is full of
+        // cards, and a gradient on each one reads as noise next to the charts and status colours, which are
+        // the things that should stand out. Still no DropShadowEffect, so PERF-008 holds.
+        SetBrush(res, "CardSurface", theme.Surface);
+        SetBrush(res, "CardRim", theme.Border);
 
         // Row hover — a neutral tint, deliberately distinct from the accent-tinted selection
         // (AccentSoft). Before, DataGrid rows used AccentSoft for BOTH hover and selection, so hovering
@@ -556,6 +551,7 @@ public sealed class ThemeService
         SetBrush(res, "RowHoverMark", RowHoverMarkColor(theme));
 
         ApplyStatusBrushes(res, theme.IsDark);
+        ApplyHandyControlBrushes(res, theme);
 
         ThemeChanged?.Invoke();
     }
@@ -586,17 +582,32 @@ public sealed class ThemeService
     internal static Color RowHoverMarkColor(ThemePreset theme) => theme.TextMuted;
 
     /// <summary>
-    /// Builds a frozen top-to-bottom <see cref="LinearGradientBrush"/> from the given color/offset
-    /// stops (StartPoint 0.5,0 → EndPoint 0.5,1). Used for the card sheen + rim-light; the last stop's
-    /// color holds to the bottom edge. Frozen so it is shareable and cheap across many cards.
+    /// Points HandyControl's brushes at the preset, for the controls that take their look from it rather
+    /// than from App.xaml (lists, menus, group boxes, date pickers).
     /// </summary>
-    private static LinearGradientBrush VGradient(params (Color Color, double Offset)[] stops)
+    /// <remarks>
+    /// HandyControl only knows a dark and a light palette of its own, so switching its theme alone would
+    /// leave those controls grey-on-grey next to a tinted preset. Written to the application dictionary,
+    /// these win over HandyControl's merged ones; the light/dark switch still runs for every brush not
+    /// listed here.
+    /// </remarks>
+    private static void ApplyHandyControlBrushes(ResourceDictionary res, ThemePreset theme)
     {
-        var brush = new LinearGradientBrush { StartPoint = new(0.5, 0), EndPoint = new(0.5, 1) };
-        foreach (var (color, offset) in stops)
-            brush.GradientStops.Add(new GradientStop(color, offset));
-        brush.Freeze();
-        return brush;
+        ThemeManager.Current.ApplicationTheme = theme.IsDark ? ApplicationTheme.Dark : ApplicationTheme.Light;
+
+        SetBrush(res, "PrimaryBrush", theme.Accent);
+        SetBrush(res, "DarkPrimaryBrush", Darken(theme.Accent, 0.12));
+        SetBrush(res, "LightPrimaryBrush", Color.FromArgb(48, theme.Accent.R, theme.Accent.G, theme.Accent.B));
+        SetBrush(res, "BackgroundBrush", theme.Background);
+        SetBrush(res, "RegionBrush", theme.Surface);
+        SetBrush(res, "SecondaryRegionBrush", theme.Surface2);
+        SetBrush(res, "ThirdlyRegionBrush", Lerp(theme.Surface2, theme.TextPrimary, 0.05));
+        SetBrush(res, "BorderBrush", theme.Border);
+        SetBrush(res, "SecondaryBorderBrush", Lerp(theme.Border, theme.TextPrimary, 0.08));
+        SetBrush(res, "PrimaryTextBrush", theme.TextPrimary);
+        SetBrush(res, "SecondaryTextBrush", theme.TextSecondary);
+        SetBrush(res, "ThirdlyTextBrush", theme.TextMuted);
+        SetBrush(res, "TextIconBrush", OnColor(theme.Accent));
     }
 
     private static void SetBrush(ResourceDictionary res, string key, Brush brush)
@@ -912,6 +923,14 @@ public sealed record ThemePreset(
 {
     public static readonly Dictionary<string, ThemePreset> Defaults = new()
     {
+        // Neutral greys with a blue accent, the same base as the Terminal app: no tint in the surfaces, so
+        // the status colours and the charts are the only colour on screen.
+        ["graphite"] = new("graphite", "Graphite", true,
+            C("#3473B8"), C("#111113"), C("#1C1C1E"), C("#232326"), C("#333338"),
+            C("#E6E6E8"), C("#B4B4BC"), C("#A0A0A8")),
+        ["graphite-light"] = new("graphite-light", "Graphite Light", false,
+            C("#2F6AAB"), C("#F4F4F5"), C("#FFFFFF"), C("#F0F0F2"), C("#DCDCE0"),
+            C("#18181B"), C("#3F3F46"), C("#52525B")),
         ["midnight-indigo"] = new("midnight-indigo", "Midnight Indigo", true,
             C("#6366F1"), C("#070A0F"), C("#0E1218"), C("#151A23"), C("#1F2633"),
             C("#F1F3F7"), C("#A3ADBF"), C("#9097A7")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #7B8396, 4.09 / 3.53)

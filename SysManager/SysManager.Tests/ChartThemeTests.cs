@@ -97,7 +97,7 @@ public class ChartThemeTests
             "#9CCC65", "#F06292", "#90A4AE", "#FFD54F",              // ping palette 5-8
         ];
 
-        Assert.Equal(12, ThemePreset.Defaults.Count);
+        Assert.Equal(14, ThemePreset.Defaults.Count);
 
         var offenders = new List<string>();
         var checkedPairs = 0;
@@ -116,9 +116,9 @@ public class ChartThemeTests
             }
         }
 
-        // Vacuity floor: 12 presets x 13 colours. A parse or enumeration fault would otherwise let an
+        // Vacuity floor: 14 presets x 13 colours. A parse or enumeration fault would otherwise let an
         // empty sweep report success.
-        Assert.Equal(12 * palette.Length, checkedPairs);
+        Assert.Equal(14 * palette.Length, checkedPairs);
 
         Assert.True(offenders.Count == 0,
             "these chart series colours are below 3:1 against their preset's card surface, so the line "

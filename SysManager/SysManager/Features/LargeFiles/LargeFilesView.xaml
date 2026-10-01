@@ -24,7 +24,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Large Files" Style="{StaticResource Display}"/>
             <TextBlock Text="Find the biggest files in a folder or on a whole drive, so you can see what is actually using your space. Read-only — results offer 'Show' and 'Copy' only, and nothing here deletes anything, even with administrator rights. Deleting is your decision to make in Explorer."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Toolbar -->

@@ -402,9 +402,23 @@
                                 <Border Background="{DynamicResource Surface2}" CornerRadius="{StaticResource RadiusMd}"
                                         Padding="14" Margin="0,0,10,10" MinWidth="200" MaxWidth="280">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding DisplayValue}" Style="{StaticResource Metric}" FontWeight="SemiBold"
+                                        <!-- The big number is for a reading. "Requires admin" and "N/A" are a
+                                             note, not a value, and at 22px they were the loudest thing on the card. -->
+                                        <TextBlock Text="{Binding DisplayValue}"
                                                    Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"
-                                                   VerticalAlignment="Center" MinWidth="65"/>
+                                                   VerticalAlignment="Center" MinWidth="65">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Metric}">
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding TemperatureC}" Value="{x:Null}">
+                                                            <Setter Property="FontSize" Value="12"/>
+                                                            <Setter Property="FontWeight" Value="Medium"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                         <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding SensorName}" FontSize="12" FontWeight="Medium"
                                                        TextWrapping="Wrap" MaxWidth="180"/>

@@ -23,7 +23,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Profile Export / Import" Style="{StaticResource Display}"/>
             <TextBlock Text="Save your SysManager settings to a file and carry them to another PC. Only SysManager's own configuration is exported — never system settings — so importing just overwrites the app's config and can be undone by importing a different profile."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Export card -->

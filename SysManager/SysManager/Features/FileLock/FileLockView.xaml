@@ -26,7 +26,7 @@
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
             <TextBlock Text="File Lock Detector" Style="{StaticResource Display}"/>
             <TextBlock Text="Find out which process is holding a file or folder open when you get a &quot;file in use&quot; error."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->

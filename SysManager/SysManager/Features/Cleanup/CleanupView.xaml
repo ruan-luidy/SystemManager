@@ -16,7 +16,7 @@
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Quick Cleanup" Style="{StaticResource Display}"/>
             <TextBlock Text="Free up disk space: clear out temporary files and the Recycle Bin, and reclaim the old Windows update files Windows keeps in reserve. Nothing here touches your documents, photos or installed programs."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->

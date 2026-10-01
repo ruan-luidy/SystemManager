@@ -24,7 +24,7 @@
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
             <TextBlock Text="CPU Core Affinity" Style="{StaticResource Display}"/>
             <TextBlock Text="Pin a process to specific CPU cores. On Intel hybrid CPUs, P-cores and E-cores are labelled. Affinity reverts when the process exits."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Process picker -->

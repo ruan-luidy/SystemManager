@@ -23,7 +23,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Startup Manager" Style="{StaticResource Display}"/>
             <TextBlock Text="Programs that run when Windows starts. Disabling is non-destructive — you can re-enable anytime. Scheduled tasks from other programs are listed too when SysManager runs as administrator; Windows' own tasks are left out, so System → Task Scheduler is where you see every task."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->
@@ -206,7 +206,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="Status" Width="100" MinWidth="90" SortMemberPath="StatusText">
+                    <DataGridTemplateColumn Header="Status" Width="112" MinWidth="104" SortMemberPath="StatusText">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="{StaticResource RadiusMd}" Padding="8,5" VerticalAlignment="Center" Margin="4,0"
@@ -222,19 +222,6 @@
                                         </Style>
                                     </Border.Style>
                                     <Grid>
-                                        <Border Width="3" HorizontalAlignment="Left" CornerRadius="2"
-                                                Margin="-8,-5,0,-5">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="{DynamicResource Success}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsEnabled}" Value="False">
-                                                            <Setter Property="Background" Value="{DynamicResource TextMuted}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                        </Border>
                                         <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
                                             <Ellipse Width="6" Height="6" VerticalAlignment="Center">
                                                 <Ellipse.Style>

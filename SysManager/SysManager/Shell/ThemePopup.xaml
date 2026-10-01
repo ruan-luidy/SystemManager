@@ -28,7 +28,7 @@
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="480" Padding="20,14,20,18">
                 <StackPanel>
                     <!-- Mode switcher -->
-                    <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}" Padding="3"
+                    <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusMd}" Padding="3"
                             BorderBrush="{DynamicResource Border1}" BorderThickness="1" Margin="0,0,0,16">
                         <UniformGrid Columns="4">
                             <RadioButton x:Name="DarkMode" Content="Dark" GroupName="Mode"
@@ -73,7 +73,7 @@
                         <TextBlock Text="CUSTOM COLORS" Style="{StaticResource SectionLabel}" Margin="0,0,0,10"/>
 
                         <!-- Accent picker -->
-                        <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}"
+                        <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusMd}"
                                 BorderBrush="{DynamicResource Border1}" BorderThickness="1"
                                 Padding="12,8" Margin="0,0,0,8">
                             <Grid>
@@ -106,7 +106,7 @@
                         </Border>
 
                         <!-- Background picker -->
-                        <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}"
+                        <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusMd}"
                                 BorderBrush="{DynamicResource Border1}" BorderThickness="1"
                                 Padding="12,8" Margin="0,0,0,8">
                             <Grid>
@@ -131,7 +131,7 @@
                         </Border>
 
                         <!-- Surface picker -->
-                        <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}"
+                        <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusMd}"
                                 BorderBrush="{DynamicResource Border1}" BorderThickness="1"
                                 Padding="12,8" Margin="0,0,0,8">
                             <Grid>
@@ -156,7 +156,7 @@
                         </Border>
 
                         <!-- Text picker -->
-                        <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}"
+                        <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusMd}"
                                 BorderBrush="{DynamicResource Border1}" BorderThickness="1"
                                 Padding="12,8">
                             <Grid>

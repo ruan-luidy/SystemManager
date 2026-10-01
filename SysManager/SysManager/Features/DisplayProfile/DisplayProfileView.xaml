@@ -26,7 +26,7 @@
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
             <TextBlock Text="Display Profiles" Style="{StaticResource Display}"/>
             <TextBlock Text="Quickly switch resolution and refresh rate — e.g. 165 Hz for gaming, 60 Hz for work. Applies for this session and reverts on reboot."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Display picker + current mode -->
@@ -58,7 +58,7 @@
 
         <!-- Auto-revert confirmation bar -->
         <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
-                BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,10" Margin="0,0,0,12"
+                BorderThickness="1" CornerRadius="{StaticResource RadiusMd}" Padding="12,10" Margin="0,0,0,12"
                 Visibility="{Binding IsAwaitingConfirm, Converter={StaticResource FlexVis}}">
             <Grid>
                 <Grid.ColumnDefinitions>

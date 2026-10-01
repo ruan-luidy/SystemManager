@@ -23,7 +23,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Restore Points" Style="{StaticResource Display}"/>
             <TextBlock Text="List, create, and restore Windows System Restore points. All three need administrator rights; restoring restarts Windows to roll the system back."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->

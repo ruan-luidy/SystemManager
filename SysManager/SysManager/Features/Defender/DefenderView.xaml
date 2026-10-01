@@ -28,7 +28,7 @@
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
             <TextBlock Text="Defender Tweaks" Style="{StaticResource Display}"/>
             <TextBlock Text="View Microsoft Defender status, toggle PUA and ransomware protection, and manage scan-exclusion folders. Changes need administrator rights."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->
@@ -38,7 +38,7 @@
 
         <!-- Tamper Protection warning -->
         <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
-                BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,10" Margin="0,0,0,12"
+                BorderThickness="1" CornerRadius="{StaticResource RadiusMd}" Padding="12,10" Margin="0,0,0,12"
                 Visibility="{Binding IsTamperProtected, Converter={StaticResource FlexVis}}">
             <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width along
                  its orientation, so TextWrapping was inert and this warning clipped (#1807). -->

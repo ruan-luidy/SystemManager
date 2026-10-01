@@ -98,7 +98,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Context Menu Manager" Style="{StaticResource Display}"/>
             <TextBlock Text="Manage entries that appear when you right-click files, folders, or the desktop in Windows Explorer. Toggle entries to show or hide them — changes are non-destructive and reversible."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
             <!-- Says the export exists. It was written before every change and mentioned nowhere, so a file a
                  user could have double-clicked was an invisible folder that only grew (#2369). Worded not to
                  oversell it: the toggle above is the undo, and this is for someone who knows what a .reg is. -->

@@ -26,7 +26,7 @@
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Windows Update" Style="{StaticResource Display}"/>
             <TextBlock Text="Check, list and install Windows updates — click column headers to sort. KB = Microsoft Knowledge Base article ID; some updates (Defender, drivers, feature upgrades) have no KB."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->

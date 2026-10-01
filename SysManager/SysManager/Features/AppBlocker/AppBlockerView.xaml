@@ -40,7 +40,7 @@
              warning — DockPanel rather than a horizontal StackPanel, which measures children with infinite
              width and would leave TextWrapping inert (#1807). -->
         <Border Grid.Row="1" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
-                BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,10" Margin="0,0,0,12"
+                BorderThickness="1" CornerRadius="{StaticResource RadiusMd}" Padding="12,10" Margin="0,0,0,12"
                 Visibility="{Binding HasUnrecoverableBlock, Converter={StaticResource FlexVis}}">
             <DockPanel>
                 <ph:PackIconPhosphorIcons Kind="WarningBold" Width="14" Height="14" DockPanel.Dock="Left" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,10,0"/>

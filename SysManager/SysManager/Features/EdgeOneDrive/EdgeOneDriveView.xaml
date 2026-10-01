@@ -22,7 +22,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Edge/OneDrive Remover" Style="{StaticResource Display}"/>
             <TextBlock Text="Safely take Microsoft Edge and OneDrive out of your way — and put them back whenever you like. OneDrive can be fully removed for your account. Edge is never uninstalled (Windows needs it and would reinstall it); instead it's disabled and de-integrated so it stops running on its own. Everything here is reversible."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner: not elevated. OneDrive removal works without admin; the Edge

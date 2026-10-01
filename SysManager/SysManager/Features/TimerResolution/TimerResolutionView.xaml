@@ -26,7 +26,7 @@
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
             <TextBlock Text="Timer Resolution" Style="{StaticResource Display}"/>
             <TextBlock Text="Request a finer Windows timer for lower input latency in games. Fully reversible — released when you turn it off or close the app."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Style="{StaticResource Subtle}" MaxWidth="760" HorizontalAlignment="Left" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Current resolution card -->
@@ -68,7 +68,7 @@
 
         <!-- Power warning -->
         <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
-                BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,10" Margin="0,0,0,16">
+                BorderThickness="1" CornerRadius="{StaticResource RadiusMd}" Padding="12,10" Margin="0,0,0,16">
             <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width along
                  its orientation, so TextWrapping was inert and this warning clipped (#1807). -->
             <DockPanel>
