@@ -3,10 +3,10 @@
 // License: MIT
 
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.ContextMenu;
+using SysManager.Features.ContextMenu.Models;
+using SysManager.Features.ContextMenu.Services;
+using SysManager.Shared.Helpers;
 
 namespace SysManager.Tests;
 

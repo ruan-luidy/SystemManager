@@ -2,8 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.CliInterface;
+using SysManager.Features.CliInterface.Models;
+using SysManager.Features.CliInterface.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

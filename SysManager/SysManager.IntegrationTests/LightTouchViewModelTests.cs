@@ -2,8 +2,13 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.AppUpdates;
+using SysManager.Features.Cleanup;
+using SysManager.Features.Drivers;
+using SysManager.Features.WindowsUpdate;
+using SysManager.Features.WindowsUpdate.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 
@@ -140,8 +145,8 @@ public class LightTouchViewModelTests
     public void AppUpdatesVm_ToggleSelectAll_AffectsPackages()
     {
         var vm = new AppUpdatesViewModel(new WingetService(new PowerShellRunner()));
-        vm.Packages.Add(new Models.AppPackage { Name = "A" });
-        vm.Packages.Add(new Models.AppPackage { Name = "B" });
+        vm.Packages.Add(new AppPackage { Name = "A" });
+        vm.Packages.Add(new AppPackage { Name = "B" });
 
         vm.SelectAll = false;
         Assert.All(vm.Packages, p => Assert.False(p.IsSelected));

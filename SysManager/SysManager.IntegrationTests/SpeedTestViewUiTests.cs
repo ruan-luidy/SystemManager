@@ -7,10 +7,10 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
-using SysManager.Views;
+using SysManager.Features.SpeedTest;
+using SysManager.Shared;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 

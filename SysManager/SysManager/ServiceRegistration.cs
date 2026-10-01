@@ -3,8 +3,100 @@
 // License: MIT
 
 using Microsoft.Extensions.DependencyInjection;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.About;
+using SysManager.Features.AppAlerts;
+using SysManager.Features.AppAlerts.Services;
+using SysManager.Features.AppBlocker;
+using SysManager.Features.AppUpdates;
+using SysManager.Features.AudioMixer;
+using SysManager.Features.AudioMixer.Services;
+using SysManager.Features.BandwidthMonitor;
+using SysManager.Features.BandwidthMonitor.Services;
+using SysManager.Features.BatteryHealth;
+using SysManager.Features.BootAnalyzer;
+using SysManager.Features.BrowserCleaner;
+using SysManager.Features.BulkInstaller;
+using SysManager.Features.BulkInstaller.Services;
+using SysManager.Features.Cleanup;
+using SysManager.Features.CliInterface;
+using SysManager.Features.ContextMenu;
+using SysManager.Features.ContextMenu.Services;
+using SysManager.Features.CpuAffinity;
+using SysManager.Features.DarkMode;
+using SysManager.Features.Dashboard;
+using SysManager.Features.Dashboard.Services;
+using SysManager.Features.Debloater;
+using SysManager.Features.Debloater.Services;
+using SysManager.Features.DeepCleanup;
+using SysManager.Features.Defender;
+using SysManager.Features.Defender.Services;
+using SysManager.Features.DiskAnalyzer;
+using SysManager.Features.DiskAnalyzer.Services;
+using SysManager.Features.DisplayProfile;
+using SysManager.Features.DisplayProfile.Services;
+using SysManager.Features.DnsHosts;
+using SysManager.Features.DnsHosts.Services;
+using SysManager.Features.Drivers;
+using SysManager.Features.DuplicateFile;
+using SysManager.Features.DuplicateFile.Services;
+using SysManager.Features.EdgeOneDrive;
+using SysManager.Features.EdgeOneDrive.Services;
+using SysManager.Features.EnvironmentVariables;
+using SysManager.Features.EnvironmentVariables.Services;
+using SysManager.Features.FileLock;
+using SysManager.Features.FileLock.Services;
+using SysManager.Features.FileShredder;
+using SysManager.Features.FileShredder.Services;
+using SysManager.Features.Gaming;
+using SysManager.Features.LargeFiles;
+using SysManager.Features.LargeFiles.Services;
+using SysManager.Features.LegacyPanels;
+using SysManager.Features.LegacyPanels.Services;
+using SysManager.Features.Logs;
+using SysManager.Features.Logs.Services;
+using SysManager.Features.NetworkRepair;
+using SysManager.Features.NotificationBlocker;
+using SysManager.Features.Performance;
+using SysManager.Features.Ping;
+using SysManager.Features.Privacy;
+using SysManager.Features.PrivacyMonitor;
+using SysManager.Features.PrivacyMonitor.Services;
+using SysManager.Features.ProcessManager;
+using SysManager.Features.Profile;
+using SysManager.Features.ResourceHistory;
+using SysManager.Features.ResourceHistory.Services;
+using SysManager.Features.RestorePoints;
+using SysManager.Features.ScheduledMaintenance;
+using SysManager.Features.ScheduledMaintenance.Services;
+using SysManager.Features.SettingsWatchdog;
+using SysManager.Features.ShortcutCleaner;
+using SysManager.Features.SpeedTest;
+using SysManager.Features.StandbyMemory;
+using SysManager.Features.StandbyMemory.Services;
+using SysManager.Features.Startup;
+using SysManager.Features.Startup.Services;
+using SysManager.Features.SystemFixes;
+using SysManager.Features.SystemFixes.Services;
+using SysManager.Features.SystemHealth;
+using SysManager.Features.SystemHealth.Services;
+using SysManager.Features.SystemReport;
+using SysManager.Features.TaskScheduler;
+using SysManager.Features.TaskScheduler.Services;
+using SysManager.Features.TimerResolution;
+using SysManager.Features.Traceroute;
+using SysManager.Features.TweaksHub;
+using SysManager.Features.TweaksHub.Services;
+using SysManager.Features.Uninstaller;
+using SysManager.Features.Uninstaller.Services;
+using SysManager.Features.WindowsFeatures;
+using SysManager.Features.WindowsFeatures.Services;
+using SysManager.Features.WindowsServices;
+using SysManager.Features.WindowsServices.Services;
+using SysManager.Features.WindowsUpdate;
+using SysManager.Features.WindowsUpdate.Services;
+using SysManager.Shared;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Services;
 
 namespace SysManager;
 
@@ -110,7 +202,7 @@ public static class ServiceRegistration
             sp.GetRequiredService<ICpuAffinityService>(),
             sp.GetRequiredService<StandbyMemoryService>(),
             sp.GetRequiredService<ISessionRestorePoint>(),
-            Helpers.AdminHelper.IsElevated()));
+            AdminHelper.IsElevated()));
 
         // Registered as the concrete type as well, because the shell needs Bind() while every tab needs
         // only the interface. One instance either way — two registrations of the same object, not two

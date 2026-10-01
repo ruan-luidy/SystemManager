@@ -3,8 +3,23 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.About;
+using SysManager.Features.AppUpdates;
+using SysManager.Features.Cleanup;
+using SysManager.Features.Dashboard;
+using SysManager.Features.Dashboard.Services;
+using SysManager.Features.DeepCleanup;
+using SysManager.Features.Drivers;
+using SysManager.Features.LargeFiles;
+using SysManager.Features.LargeFiles.Services;
+using SysManager.Features.Logs;
+using SysManager.Features.Logs.Services;
+using SysManager.Features.SystemHealth;
+using SysManager.Features.SystemHealth.Services;
+using SysManager.Features.WindowsUpdate;
+using SysManager.Features.WindowsUpdate.Services;
+using SysManager.Shared.Services;
+using SysManager.Shell;
 
 namespace SysManager.IntegrationTests;
 

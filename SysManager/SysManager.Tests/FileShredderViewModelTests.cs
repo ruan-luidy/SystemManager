@@ -4,10 +4,10 @@
 
 using System.IO;
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.FileShredder;
+using SysManager.Features.FileShredder.Models;
+using SysManager.Features.FileShredder.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

@@ -4,7 +4,6 @@
 
 using System.IO;
 using System.Security.Cryptography;
-using SysManager.Services;
 
 namespace SysManager.Tests;
 

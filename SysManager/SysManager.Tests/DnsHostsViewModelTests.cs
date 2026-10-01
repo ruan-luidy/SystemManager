@@ -6,10 +6,10 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Management.Automation;
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.DnsHosts;
+using SysManager.Features.DnsHosts.Models;
+using SysManager.Features.DnsHosts.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

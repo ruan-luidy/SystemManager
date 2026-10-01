@@ -4,7 +4,8 @@
 
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using SysManager.ViewModels;
+using SysManager.Shared;
+using SysManager.Shell;
 
 namespace SysManager.Tests;
 

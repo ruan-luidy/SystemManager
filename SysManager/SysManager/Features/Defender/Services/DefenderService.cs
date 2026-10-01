@@ -1,0 +1,207 @@
+// SysManager · DefenderService
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+
+using System.Collections;
+using System.Collections.ObjectModel;
+using System.Management.Automation;
+using Serilog;
+using SysManager.Features.Defender.Models;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Services;
+
+namespace SysManager.Features.Defender.Services;
+
+/// <summary>
+/// Reads and tweaks Microsoft Defender settings through the Defender PowerShell module
+/// (Get-MpPreference / Set-MpPreference / Add-MpPreference / Remove-MpPreference) via the
+/// shared <see cref="IPowerShellRunner"/> seam.
+///
+/// Two correctness rules baked in:
+/// 1. Several Defender properties are inverted "Disable" booleans; they are normalized
+///    to positive meaning when read.
+/// 2. Tamper Protection can SILENTLY reject a Set (it "appears to succeed but is
+///    ignored"), and the runner forwards PowerShell errors to its line stream rather
+///    than throwing — so every change is verified by reading the value back and
+///    comparing, never by trusting the Set call.
+///
+/// Changing Defender requires administrator; without it the Set is rejected and the
+/// read-back simply shows no change, surfaced cleanly to the user.
+/// </summary>
+public sealed class DefenderService
+{
+    private readonly IPowerShellRunner _ps;
+
+    public DefenderService(IPowerShellRunner ps) => _ps = ps;
+
+    /// <summary>
+    /// The status read. Both reads stop on failure.
+    /// </summary>
+    /// <remarks>
+    /// Without <c>-ErrorAction Stop</c>, a failed <c>Get-MpPreference</c> left <c>$p</c> null and the object
+    /// below was still emitted, with every field null. <see cref="ParseStatus"/> turns a null "Disable" flag
+    /// into protection ON, so a status that was never read showed real-time protection "On" (#2476). A failed
+    /// read now throws, and <see cref="GetStatusAsync"/> reports it as <see cref="DefenderStatus.Unavailable"/>.
+    /// <para><c>internal</c> so a test can run this exact text against shadowed Defender cmdlets.</para>
+    /// </remarks>
+    internal const string StatusScript = """
+        $p = Get-MpPreference -ErrorAction Stop
+        $s = Get-MpComputerStatus -ErrorAction Stop
+        [PSCustomObject]@{
+            DisableRealtimeMonitoring   = $p.DisableRealtimeMonitoring
+            PUAProtection               = [int]$p.PUAProtection
+            MAPSReporting               = [int]$p.MAPSReporting
+            EnableControlledFolderAccess = [int]$p.EnableControlledFolderAccess
+            ExclusionPath               = @($p.ExclusionPath)
+            ExclusionExtension          = @($p.ExclusionExtension)
+            ExclusionProcess            = @($p.ExclusionProcess)
+            IsTamperProtected           = [bool]$s.IsTamperProtected
+        }
+        """;
+
+    /// <summary>Read the current Defender status, or <see cref="DefenderStatus.Unavailable"/>.</summary>
+    public async Task<DefenderStatus> GetStatusAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            Collection<PSObject> results = await _ps.RunAsync(StatusScript, cancellationToken: ct).ConfigureAwait(false);
+            if (results.Count == 0) return DefenderStatus.Unavailable;
+            return HideWithheldExclusions(ParseStatus(results[0]), AdminHelper.IsElevated());
+        }
+        catch (System.Management.Automation.RuntimeException ex)
+        {
+            Log.Debug("Defender status read failed: {Error}", ex.Message);
+            return DefenderStatus.Unavailable;
+        }
+    }
+
+    /// <summary>
+    /// Empties the exclusion lists and marks them unreadable when the session is not elevated.
+    /// </summary>
+    /// <remarks>
+    /// Windows shows the exclusion lists only to an administrator. For a standard user it puts a sentence where
+    /// each list should be — "N/A: Must be an administrator to view exclusions" on an English system — and that
+    /// sentence would otherwise be listed as an excluded folder. The decision rests on the session's elevation,
+    /// not on matching the sentence, so it does not depend on the sentence's wording or language; the
+    /// PowerShell child that ran the read has the same token as the app.
+    /// </remarks>
+    internal static DefenderStatus HideWithheldExclusions(DefenderStatus status, bool elevated) =>
+        elevated
+            ? status
+            : status with { ExclusionPaths = [], ExclusionExtensions = [], ExclusionProcesses = [], ExclusionsReadable = false };
+
+    /// <summary>Parse a Get-MpPreference/Get-MpComputerStatus projection into a status.</summary>
+    public static DefenderStatus ParseStatus(PSObject obj)
+    {
+        bool disableRtp = ToBool(Prop(obj, "DisableRealtimeMonitoring"));
+        return new DefenderStatus(
+            Available: true,
+            IsTamperProtected: ToBool(Prop(obj, "IsTamperProtected")),
+            RealtimeProtection: !disableRtp, // normalize the inverted "Disable" boolean
+            PuaProtection: ToInt(Prop(obj, "PUAProtection")),
+            MapsReporting: ToInt(Prop(obj, "MAPSReporting")),
+            ControlledFolderAccess: ToInt(Prop(obj, "EnableControlledFolderAccess")),
+            ExclusionPaths: ToStringList(Prop(obj, "ExclusionPath")),
+            ExclusionExtensions: ToStringList(Prop(obj, "ExclusionExtension")),
+            ExclusionProcesses: ToStringList(Prop(obj, "ExclusionProcess")));
+    }
+
+    /// <summary>
+    /// Set PUA protection (0/1/2) and verify the change took effect. Returns the
+    /// re-read status; compare its PuaProtection to confirm success.
+    /// </summary>
+    public Task<DefenderStatus> SetPuaProtectionAsync(int value, CancellationToken ct = default)
+        => ApplyAndVerifyAsync("param([int]$Value) Set-MpPreference -PUAProtection $Value", new() { ["Value"] = ClampTri(value) }, ct);
+
+    /// <summary>Set Controlled Folder Access (0/1/2) and verify.</summary>
+    public Task<DefenderStatus> SetControlledFolderAccessAsync(int value, CancellationToken ct = default)
+        => ApplyAndVerifyAsync("param([int]$Value) Set-MpPreference -EnableControlledFolderAccess $Value", new() { ["Value"] = ClampTri(value) }, ct);
+
+    /// <summary>Add a folder exclusion (additive — never replaces the array). Verifies.</summary>
+    public Task<DefenderStatus> AddExclusionPathAsync(string path, CancellationToken ct = default)
+    {
+        // Trust-boundary validation at the service (the UI validates too, but the service
+        // is public): reject empty, non-rooted, and wildcard paths so an over-broad
+        // exclusion ("*", "C:\?") can never weaken Defender, even via a non-UI caller.
+        if (!IsValidExclusionPath(path))
+            throw new ArgumentException("Exclusion path must be a rooted path without wildcards.", nameof(path));
+        return ApplyAndVerifyAsync("param([string]$Path) Add-MpPreference -ExclusionPath $Path", new() { ["Path"] = path }, ct);
+    }
+
+    /// <summary>
+    /// A valid exclusion path is non-empty, rooted, free of wildcards, and within the
+    /// Win32 path length limit. Existence is intentionally NOT required here — the path
+    /// may legitimately not exist yet on the service boundary; the UI checks existence.
+    /// </summary>
+    internal static bool IsValidExclusionPath(string path)
+        => !string.IsNullOrWhiteSpace(path)
+           && System.IO.Path.IsPathRooted(path)
+           && !path.Contains('*') && !path.Contains('?')
+           && path.Length <= 260;
+
+    /// <summary>Remove a folder exclusion. Verifies.</summary>
+    public Task<DefenderStatus> RemoveExclusionPathAsync(string path, CancellationToken ct = default)
+        => ApplyAndVerifyAsync("param([string]$Path) Remove-MpPreference -ExclusionPath $Path", new() { ["Path"] = path }, ct);
+
+    /// <summary>
+    /// Run a hard-coded Set/Add/Remove script with bound parameters (never interpolated),
+    /// then return a fresh status read so the caller can verify the change actually applied
+    /// (Tamper Protection / missing admin can silently reject it).
+    /// </summary>
+    private async Task<DefenderStatus> ApplyAndVerifyAsync(string script, Dictionary<string, object?> parameters, CancellationToken ct)
+    {
+        try
+        {
+            await _ps.RunAsync(script, parameters, ct).ConfigureAwait(false);
+        }
+        catch (System.Management.Automation.RuntimeException ex)
+        {
+            Log.Debug("Defender set failed: {Error}", ex.Message);
+        }
+        return await GetStatusAsync(ct).ConfigureAwait(false);
+    }
+
+    // ── Pure parse helpers (testable) ──────────────────────────────────
+    private static object? Prop(PSObject obj, string name) => obj.Properties[name]?.Value;
+
+    internal static bool ToBool(object? v) => v switch
+    {
+        bool b => b,
+        not null when bool.TryParse(v.ToString(), out bool r) => r,
+        _ => false,
+    };
+
+    internal static int ToInt(object? v)
+    {
+        if (v is null) return 0;
+        try { return Convert.ToInt32(v); }
+        catch (FormatException) { return 0; }
+        catch (InvalidCastException) { return 0; }
+        catch (OverflowException) { return 0; }
+    }
+
+    internal static IReadOnlyList<string> ToStringList(object? value)
+    {
+        value = UnwrapPsObject(value);
+        if (value is null) return [];
+        if (value is string text)
+            return text.Length > 0 ? [text] : [];
+        if (value is IEnumerable values)
+        {
+            return values.Cast<object?>()
+                .Select(UnwrapPsObject)
+                .Where(item => item is not null)
+                .Select(item => item!.ToString() ?? "")
+                .Where(item => item.Length > 0)
+                .ToList();
+        }
+
+        string single = value.ToString() ?? "";
+        return single.Length > 0 ? [single] : [];
+    }
+
+    private static object? UnwrapPsObject(object? value)
+        => value is PSObject psObject ? psObject.BaseObject : value;
+
+    internal static int ClampTri(int value) => value is >= 0 and <= 2 ? value : 0;
+}

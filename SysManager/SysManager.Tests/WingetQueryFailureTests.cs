@@ -3,9 +3,13 @@
 // License: MIT
 
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.BulkInstaller;
+using SysManager.Features.BulkInstaller.Services;
+using SysManager.Features.Uninstaller;
+using SysManager.Features.Uninstaller.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

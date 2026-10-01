@@ -3,7 +3,8 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Services;
+using SysManager.Features.StandbyMemory;
+using SysManager.Features.StandbyMemory.Services;
 
 namespace SysManager.Tests;
 
@@ -228,7 +229,7 @@ public class StandbyPreferenceServiceTests : IDisposable
         NewService().Save(new StandbyPreference(true, 2048));
         var loaded = NewService().Load();
 
-        Assert.True(ViewModels.StandbyMemoryViewModel.ShouldAutoPurge(1024, loaded.ThresholdMb));
-        Assert.False(ViewModels.StandbyMemoryViewModel.ShouldAutoPurge(4096, loaded.ThresholdMb));
+        Assert.True(StandbyMemoryViewModel.ShouldAutoPurge(1024, loaded.ThresholdMb));
+        Assert.False(StandbyMemoryViewModel.ShouldAutoPurge(4096, loaded.ThresholdMb));
     }
 }

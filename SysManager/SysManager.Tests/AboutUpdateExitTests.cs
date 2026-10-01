@@ -5,8 +5,9 @@
 using System.Diagnostics;
 using System.IO;
 using NSubstitute;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.About;
+using SysManager.Features.About.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

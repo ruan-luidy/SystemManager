@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.ViewModels;
+using SysManager.Features.BatteryHealth;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -15,31 +17,31 @@ public class BatteryHealthViewModelTests
     [Fact]
     public void Constructor_RefreshCommand_Exists()
     {
-        var vm = new BatteryHealthViewModel(new Services.BatteryService());
+        var vm = new BatteryHealthViewModel(new BatteryService());
         Assert.NotNull(vm.RefreshCommand);
     }
 
     [Fact]
     public void Constructor_Battery_NotNull()
     {
-        var vm = new BatteryHealthViewModel(new Services.BatteryService());
+        var vm = new BatteryHealthViewModel(new BatteryService());
         Assert.NotNull(vm.Battery);
     }
 
     [Fact]
     public void Summary_HasDefaultValue()
     {
-        var vm = new BatteryHealthViewModel(new Services.BatteryService());
+        var vm = new BatteryHealthViewModel(new BatteryService());
         Assert.False(string.IsNullOrEmpty(vm.Summary));
     }
 
     [Fact]
     public void Battery_CanBeReplaced()
     {
-        var vm = new BatteryHealthViewModel(new Services.BatteryService());
+        var vm = new BatteryHealthViewModel(new BatteryService());
         var changed = vm.RecordPropertyChanges();
 
-        vm.Battery = new Models.BatteryInfo { Name = "Test" };
+        vm.Battery = new BatteryInfo { Name = "Test" };
         Assert.Contains("Battery", changed);
         Assert.Equal("Test", vm.Battery.Name);
     }
@@ -51,7 +53,7 @@ public class BatteryHealthViewModelTests
         // property, so it would stay green if [ObservableProperty] were dropped from Summary — and a
         // bound label silently freezing is the only regression this property realistically has.
         // Battery_CanBeReplaced two tests above already uses this pattern.
-        var vm = new BatteryHealthViewModel(new Services.BatteryService());
+        var vm = new BatteryHealthViewModel(new BatteryService());
         var changed = vm.RecordPropertyChanges();
 
         vm.Summary = "Custom summary";
@@ -65,7 +67,7 @@ public class BatteryHealthViewModelTests
     // The service reported a failed read as no battery, so a laptop was told "No battery detected — this device
     // runs on AC power only." The view model's own "Could not read battery information." was never reached.
 
-    private static readonly Models.BatteryInfo Laptop = new()
+    private static readonly BatteryInfo Laptop = new()
     {
         HasBattery = true,
         Name = "Primary",
@@ -73,7 +75,7 @@ public class BatteryHealthViewModelTests
         Status = "Charging",
     };
 
-    private static async Task<BatteryHealthViewModel> SettledVm(Func<Task<Models.BatteryInfo?>> read)
+    private static async Task<BatteryHealthViewModel> SettledVm(Func<Task<BatteryInfo?>> read)
     {
         var vm = new BatteryHealthViewModel(read);
         await vm.InitializationComplete;
@@ -83,7 +85,7 @@ public class BatteryHealthViewModelTests
     [Fact]
     public async Task AReadThatFailed_SaysSo_NotThatThereIsNoBattery()
     {
-        var vm = await SettledVm(() => Task.FromResult<Models.BatteryInfo?>(null));
+        var vm = await SettledVm(() => Task.FromResult<BatteryInfo?>(null));
 
         Assert.True(vm.ReadFailed);
         Assert.Equal("Could not read the battery. Press Refresh to try again.", vm.Summary);
@@ -110,7 +112,7 @@ public class BatteryHealthViewModelTests
     [Fact]
     public async Task NoBattery_IsStillReportedAsNoBattery()
     {
-        var vm = await SettledVm(() => Task.FromResult<Models.BatteryInfo?>(new Models.BatteryInfo()));
+        var vm = await SettledVm(() => Task.FromResult<BatteryInfo?>(new BatteryInfo()));
 
         Assert.False(vm.ReadFailed);
         Assert.Equal("No battery detected on this device.", vm.NoBatteryText);

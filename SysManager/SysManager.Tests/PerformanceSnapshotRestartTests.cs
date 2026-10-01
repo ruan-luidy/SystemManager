@@ -4,8 +4,8 @@
 
 using System.IO;
 using NSubstitute;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.Performance;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

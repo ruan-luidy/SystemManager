@@ -3,9 +3,10 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.DiskAnalyzer;
+using SysManager.Features.DiskAnalyzer.Models;
+using SysManager.Features.DiskAnalyzer.Services;
+using SysManager.Shared.Controls;
 
 namespace SysManager.Tests;
 
@@ -354,8 +355,8 @@ public class DiskAnalyzerViewModelTests
         // disclosure fails here.
         var detail = NewVm().ExclusionDetail;
 
-        Assert.NotEmpty(Services.DiskAnalyzerService.ExcludedFolderNames);
-        foreach (var name in Services.DiskAnalyzerService.ExcludedFolderNames)
+        Assert.NotEmpty(DiskAnalyzerService.ExcludedFolderNames);
+        foreach (var name in DiskAnalyzerService.ExcludedFolderNames)
             Assert.Contains(name, detail);
     }
 

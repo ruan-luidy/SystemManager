@@ -5,8 +5,9 @@
 using System.IO;
 using System.Reflection;
 using NSubstitute;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.Performance;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -436,7 +437,7 @@ public class PerformanceViewModelTests
     {
         // SetHibernationAsync discarded powercfg's exit code, so a machine without hibernation support was told
         // "✓ Hibernation enabled." Both directions answer 1 here, so the test holds whichever state the host is in.
-        using var elevated = Helpers.AdminHelper.ForceElevation(true);
+        using var elevated = AdminHelper.ForceElevation(true);
         var vm = NewVm(completeInitialization: true, ps =>
             ps.RunProcessAsync("powercfg.exe", Arg.Is<string>(a => a.StartsWith("/hibernate", StringComparison.Ordinal)),
                                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
@@ -522,7 +523,7 @@ public class PerformanceViewModelTests
     [Fact]
     public async Task DisablingHibernation_Confirmation_SaysFastStartupAndHybridSleepGoToo()
     {
-        using var elevated = Helpers.AdminHelper.ForceElevation(true);
+        using var elevated = AdminHelper.ForceElevation(true);
         var vm = NewVm(completeInitialization: true);
         await vm.InitializationComplete;
         vm.IsHibernationEnabled = true;

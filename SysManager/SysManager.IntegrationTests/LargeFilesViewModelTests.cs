@@ -3,8 +3,9 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.LargeFiles;
+using SysManager.Features.LargeFiles.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 

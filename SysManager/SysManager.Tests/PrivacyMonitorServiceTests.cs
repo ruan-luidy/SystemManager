@@ -5,7 +5,8 @@
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Microsoft.Win32;
-using SysManager.Services;
+using SysManager.Features.PrivacyMonitor;
+using SysManager.Features.PrivacyMonitor.Services;
 
 namespace SysManager.Tests;
 

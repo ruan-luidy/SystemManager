@@ -3,9 +3,9 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.DeepCleanup;
+using SysManager.Features.LargeFiles;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 

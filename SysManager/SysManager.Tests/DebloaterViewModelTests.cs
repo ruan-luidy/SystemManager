@@ -5,9 +5,10 @@
 using System.Collections.ObjectModel;
 using System.Management.Automation;
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.Debloater;
+using SysManager.Features.Debloater.Models;
+using SysManager.Features.Debloater.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

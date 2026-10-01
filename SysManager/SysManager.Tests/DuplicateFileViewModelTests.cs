@@ -3,8 +3,9 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Models;
-using SysManager.ViewModels;
+using SysManager.Features.DuplicateFile;
+using SysManager.Features.DuplicateFile.Models;
+using SysManager.Features.DuplicateFile.Services;
 
 namespace SysManager.Tests;
 
@@ -22,7 +23,7 @@ public class DuplicateFileViewModelTests
     // preset assertions observe the populated collection instead of racing the load.
     private static DuplicateFileViewModel NewVm()
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = new DuplicateFileViewModel(new DuplicateFileService());
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -315,7 +316,7 @@ public class DuplicateFileViewModelTests
     [Fact]
     public void ScanReadout_NamesTheFileBeingRead()
     {
-        var readout = DuplicateFileViewModel.BuildScanReadout(new Services.DuplicateFileService.ScanProgress(
+        var readout = DuplicateFileViewModel.BuildScanReadout(new DuplicateFileService.ScanProgress(
             FilesDiscovered: 1_234, FilesHashed: 567, BytesProcessed: 0,
             CurrentFile: @"C:\Users\someone\Pictures\holiday-2019\DSC_0042.jpg",
             Phase: "Hashing files…"));
@@ -339,7 +340,7 @@ public class DuplicateFileViewModelTests
     {
         // The discovery phase reports ticks before it has a file in hand; the line must not end in a
         // dangling separator.
-        var readout = DuplicateFileViewModel.BuildScanReadout(new Services.DuplicateFileService.ScanProgress(
+        var readout = DuplicateFileViewModel.BuildScanReadout(new DuplicateFileService.ScanProgress(
             FilesDiscovered: 10, FilesHashed: 0, BytesProcessed: 0, CurrentFile: current, Phase: "Scanning"));
 
         Assert.Equal("10 found, 0 hashed", readout);
@@ -350,7 +351,7 @@ public class DuplicateFileViewModelTests
     {
         // Path.GetFileName returns "" for a path ending in a separator, which would have shown nothing at
         // all after the separator. Discovery reports folders too.
-        var readout = DuplicateFileViewModel.BuildScanReadout(new Services.DuplicateFileService.ScanProgress(
+        var readout = DuplicateFileViewModel.BuildScanReadout(new DuplicateFileService.ScanProgress(
             FilesDiscovered: 5, FilesHashed: 0, BytesProcessed: 0,
             CurrentFile: @"C:\Users\someone\Downloads\", Phase: "Scanning"));
 
@@ -363,7 +364,7 @@ public class DuplicateFileViewModelTests
     // about five times a second for the whole scan: a screen reader began a new sentence before finishing
     // the last. The phase now goes to the announced line and the fast half to a silent one beside it.
 
-    private static Services.DuplicateFileService.ScanProgress Tick(
+    private static DuplicateFileService.ScanProgress Tick(
         long discovered, long hashed, string file, string phase) =>
         new(discovered, hashed, BytesProcessed: hashed * 1024, CurrentFile: file, Phase: phase);
 

@@ -5,8 +5,9 @@
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Microsoft.Win32;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.Startup;
+using SysManager.Features.Startup.Models;
+using SysManager.Features.Startup.Services;
 
 namespace SysManager.Tests;
 

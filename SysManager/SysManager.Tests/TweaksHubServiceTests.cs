@@ -2,8 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.TweaksHub;
+using SysManager.Features.TweaksHub.Models;
+using SysManager.Features.TweaksHub.Services;
+using SysManager.Shared.Models;
 
 namespace SysManager.Tests;
 

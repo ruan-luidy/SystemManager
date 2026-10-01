@@ -6,7 +6,7 @@ using System.IO;
 using System.Reflection;
 using Serilog;
 using Serilog.Core;
-using SysManager.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

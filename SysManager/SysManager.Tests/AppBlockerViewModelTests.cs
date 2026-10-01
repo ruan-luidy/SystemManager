@@ -3,10 +3,10 @@
 // License: MIT
 
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.AppBlocker;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 using Xunit;
 
 namespace SysManager.Tests;

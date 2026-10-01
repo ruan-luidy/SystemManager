@@ -3,8 +3,12 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Helpers;
-using SysManager.Models;
+using SysManager.Features.Debloater;
+using SysManager.Features.Debloater.Models;
+using SysManager.Features.Uninstaller;
+using SysManager.Features.Uninstaller.Models;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
 
 namespace SysManager.Tests;
 
@@ -138,11 +142,7 @@ public class SelectionSurvivesRescanGroupBTests
 
     private static string ViewModelSource(string name)
     {
-        var dir = new DirectoryInfo(Path.GetDirectoryName(typeof(StoreApp).Assembly.Location)!);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "ViewModels")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        return File.ReadAllText(Path.Combine(dir!.FullName, "SysManager", "ViewModels", name + ".cs"));
+        return File.ReadAllText(TestPaths.AppPath("ViewModels", name + ".cs"));
     }
 
     /// <summary>The text of a call's own argument list, so a key can be asserted without matching the file.</summary>

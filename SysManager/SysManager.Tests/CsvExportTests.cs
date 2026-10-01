@@ -3,9 +3,23 @@
 // License: MIT
 
 using System.Text;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.AppAlerts;
+using SysManager.Features.AppAlerts.Models;
+using SysManager.Features.AppAlerts.Services;
+using SysManager.Features.BandwidthMonitor;
+using SysManager.Features.BandwidthMonitor.Services;
+using SysManager.Features.DiskAnalyzer;
+using SysManager.Features.DiskAnalyzer.Models;
+using SysManager.Features.DiskAnalyzer.Services;
+using SysManager.Features.FileLock;
+using SysManager.Features.FileLock.Models;
+using SysManager.Features.FileLock.Services;
+using SysManager.Features.PrivacyMonitor;
+using SysManager.Features.PrivacyMonitor.Models;
+using SysManager.Features.PrivacyMonitor.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

@@ -3,8 +3,8 @@
 // License: MIT
 
 using System.Globalization;
-using SysManager.Helpers;
-using SysManager.Models;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
 
 namespace SysManager.Tests;
 

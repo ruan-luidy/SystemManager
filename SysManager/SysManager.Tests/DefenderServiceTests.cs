@@ -7,8 +7,10 @@ using System.Collections.ObjectModel;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.Defender;
+using SysManager.Features.Defender.Models;
+using SysManager.Features.Defender.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

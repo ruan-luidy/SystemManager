@@ -6,8 +6,8 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
-using SysManager.Helpers;
-using SysManager.Models;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
 
 namespace SysManager.Tests;
 

@@ -6,9 +6,10 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Management.Automation;
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.Defender;
+using SysManager.Features.Defender.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Services;
 using Xunit;
 
 namespace SysManager.Tests;

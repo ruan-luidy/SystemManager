@@ -1,0 +1,955 @@
+// SysManager · ThemeService — runtime theme switching with persistence
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+
+using System.IO;
+using System.Text.Json;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Threading;
+using Microsoft.Win32;
+using Serilog;
+using SysManager.Shared.Helpers;
+
+namespace SysManager.Shared.Services;
+
+public sealed class ThemeService
+{
+    private static ThemeService? _instance;
+    public static ThemeService Instance => _instance ??= new ThemeService();
+
+    private readonly string _settingsPath;
+    private readonly Func<bool> _windowsPrefersDark;
+
+    // What Load found, for Save. After a load that could not read the file, the theme on screen is the shipped one
+    // and the file still holds the user's own, so Save does not write over it. A file that is not a theme
+    // SysManager can use is set aside before the first write (#2521).
+    private bool _unreadAtLoad;
+    private bool _unparsableAtLoad;
+
+    public event Action? ThemeChanged;
+
+    /// <summary>The theme the app ships with, and the shade position it ships at.</summary>
+    /// <remarks>
+    /// Named constants because three things have to agree on them: the field initialisers below,
+    /// <see cref="ResetToDefault"/>, and the slider's own default in <c>ThemePopup.xaml</c>. They were three
+    /// copies of the same two values.
+    /// </remarks>
+    public const string DefaultPresetId = "midnight-indigo";
+
+    /// <inheritdoc cref="DefaultPresetId"/>
+    public const double DefaultShade = 0.5;
+
+    public ThemePreset CurrentTheme { get; private set; } = ThemePreset.Defaults[DefaultPresetId];
+    public string CurrentPresetId { get; private set; } = DefaultPresetId;
+    public string CurrentMode { get; private set; } = "dark";
+    public double ShadePosition { get; private set; } = DefaultShade;
+
+    private ThemePreset _baseTheme = ThemePreset.Defaults[DefaultPresetId];
+
+    // The shade slider raises SetShade on every tick of a drag; persisting on each one would
+    // hammer the disk. Coalesce writes: SetShade applies the shade live but (re)starts this
+    // short timer, so the JSON is written once the drag settles. Created lazily on the first
+    // shade change (always on the UI thread). Discrete theme changes (SetPreset/SetAccent/
+    // SetCustom) still save immediately.
+    private DispatcherTimer? _shadeSaveTimer;
+
+    private static readonly Dictionary<string, string> DarkToLight = new()
+    {
+        ["midnight-indigo"] = "clean-indigo",
+        ["deep-ocean"] = "sky-breeze",
+        ["dark-forest"] = "mint-fresh",
+        ["neon-rose"] = "soft-blossom",
+        ["violet-night"] = "lavender",
+        ["warm-ember"] = "warm-sand",
+    };
+
+    private static readonly Dictionary<string, string> LightToDark =
+        DarkToLight.ToDictionary(kv => kv.Value, kv => kv.Key);
+
+    /// <summary>
+    /// Production goes through <see cref="Instance"/>, which passes null and lands on the real
+    /// <c>%AppData%\SysManager\theme.json</c> (ROAMING, where this file has always lived — changing it
+    /// would strand a user's saved theme). The <paramref name="configDir"/> seam exists so a test can
+    /// point the service at a temp directory instead of the developer's real theme; without it, every
+    /// test that constructed the service and saved would overwrite that file, the same class of data
+    /// loss that hit SpeedTestHistoryService (#1734, #1741). Internal because nothing outside the
+    /// assembly should build a second theme service — the app has exactly one, via <see cref="Instance"/>.
+    /// </summary>
+    /// <param name="windowsPrefersDark">
+    /// How <see cref="AutoMode"/> asks Windows which way it is set. Injected so a test can drive both answers:
+    /// the real one reads HKCU, so a test without the seam would assert whatever the developer's own machine
+    /// happens to be on, and would report the opposite result on the other workstation.
+    /// </param>
+    internal ThemeService(string? configDir = null, Func<bool>? windowsPrefersDark = null)
+    {
+        _settingsPath = Path.Combine(
+            configDir ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SysManager"),
+            "theme.json");
+        _windowsPrefersDark = windowsPrefersDark ?? WindowsIsOnDark;
+    }
+
+    /// <summary>
+    /// Reads the OS setting through the service that owns it, rather than duplicating the registry path.
+    /// </summary>
+    /// <remarks>
+    /// Constructed here rather than injected because <see cref="Instance"/> is a static singleton with no
+    /// container behind it, and <see cref="WindowsThemeService.GetCurrentTheme"/> is a bare HKCU read whose
+    /// constructor does no I/O — it only composes a path it is not asked for here. Wiring the DI graph into
+    /// this singleton to reach one registry value would be the larger change, and the seam above is what makes
+    /// the behaviour testable anyway.
+    /// </remarks>
+    private static bool WindowsIsOnDark() => new WindowsThemeService().GetCurrentTheme() == WindowsTheme.Dark;
+
+    public void Initialize()
+    {
+        Load();
+
+        // Resolve before applying: a persisted auto theme has to answer to what Windows is on NOW, not to the
+        // arm it happened to be on when the app last closed.
+        if (CurrentMode == AutoMode) ResolveFollowedTheme();
+
+        Apply(CurrentTheme);
+
+        // Once, for the process. The handler no-ops outside auto mode, so there is nothing to subscribe and
+        // unsubscribe as the user switches modes — and a subscription that only exists in one mode is one that
+        // gets forgotten on the path that leaves it.
+        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+    }
+
+    /// <summary>
+    /// Releases the process-lifetime OS-theme subscription. Called from <c>App.OnExit</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>SystemEvents</c> holds its handlers in a static list, so without this the singleton is rooted for
+    /// the life of the process — harmless for a singleton, but it also means the handler can fire during
+    /// shutdown, after the dispatcher has stopped accepting work.
+    /// </remarks>
+    public void Shutdown() => SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+
+    private void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category != UserPreferenceCategory.General || CurrentMode != AutoMode) return;
+
+        // SystemEvents raises this on its own thread and the theme writes into Application.Current.Resources,
+        // so the work has to be marshalled. General also fires for a great deal that is not the app theme,
+        // which is why FollowWindowsNow re-resolves and returns early when the answer has not moved.
+        if (System.Windows.Application.Current?.Dispatcher is { } dispatcher)
+            dispatcher.BeginInvoke(FollowWindowsNow);
+        else
+            FollowWindowsNow();
+    }
+
+    private void FollowWindowsNow()
+    {
+        var before = CurrentPresetId;
+        ResolveFollowedTheme();
+        if (CurrentPresetId != before) Save();
+    }
+
+    public string GetCompanionPreset(string targetMode)
+    {
+        if (targetMode == "dark" && LightToDark.TryGetValue(CurrentPresetId, out var darkId))
+            return darkId;
+        if (targetMode == "light" && DarkToLight.TryGetValue(CurrentPresetId, out var lightId))
+            return lightId;
+        return targetMode == "dark" ? "midnight-indigo" : "clean-indigo";
+    }
+
+    public void SetPreset(string id)
+    {
+        if (!ThemePreset.Defaults.TryGetValue(id, out var preset)) return;
+        CurrentPresetId = id;
+        _baseTheme = preset;
+        CurrentMode = preset.IsDark ? "dark" : "light";
+        ApplyShade();
+        Save();
+    }
+
+    /// <summary>
+    /// Puts the shipped theme back — the way out of a custom theme that cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// Custom mode was the only setting in the app with no undo. Four typed hex values are persisted and
+    /// <see cref="Load"/> faithfully restores them on every launch, so a theme the user could not read was a
+    /// theme they could not fix from inside the app: the only escape was deleting
+    /// <c>%AppData%\SysManager\theme.json</c>, which the person this app is for will never find. That
+    /// contradicted the product rule that a change the app makes stays reversible (#1561).
+    /// <para>Resets the shade too. A preset alone is not "the shipped theme" if the slider is still parked at
+    /// an extreme the user pushed it to while trying to rescue an unreadable one.</para>
+    /// </remarks>
+    public void ResetToDefault()
+    {
+        ShadePosition = DefaultShade;
+        // SetPreset applies and saves; it also sets CurrentMode from the preset, which clears "custom".
+        SetPreset(DefaultPresetId);
+    }
+
+    /// <summary>
+    /// The mode that follows the Windows light/dark setting instead of pinning one.
+    /// </summary>
+    /// <remarks>
+    /// The app already read this setting and already wrote it — the Dark Mode tab can put Windows on a
+    /// schedule — while refusing to follow it itself, so a user who turned that schedule on watched SysManager
+    /// desync from their desktop every evening (#1631).
+    /// </remarks>
+    public const string AutoMode = "auto";
+
+    /// <summary>
+    /// Follows the Windows light/dark setting from now on, and applies it immediately.
+    /// </summary>
+    public void FollowWindows()
+    {
+        CurrentMode = AutoMode;
+        ResolveFollowedTheme();
+        Save();
+    }
+
+    /// <summary>
+    /// Points the theme at whichever arm Windows is currently on, keeping the mode on <see cref="AutoMode"/>.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <see cref="SetPreset"/>, which sets <see cref="CurrentMode"/> from the preset's own
+    /// <c>IsDark</c> — calling it here would resolve Windows' setting and then immediately overwrite "auto"
+    /// with "dark" or "light", so the next OS change would be ignored and the mode pill would jump on its own.
+    /// <para>Resolved through <see cref="GetCompanionPreset"/>, so the user's chosen family is kept across the
+    /// switch: Warm Ember becomes Warm Sand rather than resetting to the default.</para>
+    /// </remarks>
+    private void ResolveFollowedTheme()
+    {
+        var id = GetCompanionPreset(_windowsPrefersDark() ? "dark" : "light");
+        if (!ThemePreset.Defaults.TryGetValue(id, out var preset)) return;
+
+        CurrentPresetId = id;
+        _baseTheme = preset;
+        ApplyShade();
+    }
+
+    public void SetAccent(Color accent)
+    {
+        _baseTheme = _baseTheme with { Accent = accent };
+        ApplyShade();
+        Save();
+    }
+
+    public void SetShade(double position)
+    {
+        ShadePosition = Math.Clamp(position, 0, 1);
+        ApplyShade();
+        DebouncedSave();
+    }
+
+    // Coalesces rapid shade-slider writes into a single disk save once the drag settles.
+    private void DebouncedSave()
+    {
+        _shadeSaveTimer ??= CreateShadeSaveTimer();
+        _shadeSaveTimer.Stop();
+        _shadeSaveTimer.Start();
+    }
+
+    private DispatcherTimer CreateShadeSaveTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        timer.Tick += (_, _) => { timer.Stop(); Save(); };
+        return timer;
+    }
+
+    /// <summary>
+    /// Builds and applies a theme from the four colours the appearance popup collects.
+    /// </summary>
+    /// <remarks>
+    /// Goes through <see cref="ApplyShade"/> like <see cref="SetPreset"/> and <see cref="SetAccent"/> do,
+    /// rather than assigning <see cref="CurrentTheme"/> itself. It used to do the latter, with two
+    /// consequences: the shade slider's position was silently discarded whenever a custom theme was applied,
+    /// and — more importantly — a custom theme was the ONLY kind that never went through the text-legibility
+    /// correction inside <see cref="Shade"/>. Four typed hex values could therefore produce white on white,
+    /// while every shipped preset was held to a contrast floor. Same machinery for both now.
+    /// </remarks>
+    public void SetCustom(Color accent, Color background, Color surface, Color text)
+    {
+        CurrentMode = "custom";
+        CurrentPresetId = "custom";
+        _baseTheme = CustomPreset(accent, background, surface, text);
+        ApplyShade();
+        Save();
+    }
+
+    /// <summary>
+    /// The preset the four popup colours expand into, before <see cref="Shade"/> corrects it.
+    /// </summary>
+    /// <remarks>
+    /// Extracted from <see cref="SetCustom"/> so the custom path can be measured without going through the
+    /// service — <see cref="SetCustom"/> persists to the user's real theme file, so a test that called it to
+    /// find out what a pair of colours produces would overwrite the developer's theme to ask the question.
+    /// </remarks>
+    internal static ThemePreset CustomPreset(Color accent, Color background, Color surface, Color text)
+    {
+        return new ThemePreset(
+            Id: "custom",
+            Name: "Custom",
+            IsDark: IsDarkBackground(background),
+            Accent: accent,
+            Background: background,
+            Surface: surface,
+            Surface2: Lerp(surface, background, 0.5),
+            Border: Lerp(surface, text, 0.15),
+            TextPrimary: text,
+            TextSecondary: Lerp(text, background, 0.3),
+            TextMuted: Lerp(text, background, 0.55));
+    }
+
+    /// <summary>
+    /// Pulls a panel colour toward the background until readable text on that panel is possible at all,
+    /// leaving it alone when it already is.
+    /// </summary>
+    /// <remarks>
+    /// Background and Surface are independent hex values in Custom mode, and some pairs admit no readable text
+    /// whatsoever. Primary text owes AAA to the Background and AA to the panels drawn on it; against
+    /// <c>#070A0F</c> and <c>#FFFFFF</c> those demand a relative luminance of at least 0.30 and at most 0.183,
+    /// so no colour satisfies both. The old code never noticed, because <see cref="Legible"/> corrected primary
+    /// against the Background alone: that pair rendered white text on a white card at 1.04:1, and cards, rows
+    /// and panels are what the window mostly shows.
+    /// <para><b>Correcting the text cannot fix that, which is why this sits at the input.</b> Two earlier
+    /// attempts did try the text — adding the surfaces to the correction, then searching in both directions —
+    /// and reached 2.05:1 and 4.49:1 respectively, because they were looking for a colour that does not
+    /// exist.</para>
+    /// <para>The condition is the requirement itself rather than a geometric proxy: the panel has to admit the
+    /// most extreme text this mode can produce, which is white on a dark theme and black on a light one, at AA.
+    /// Stopping merely on the same side of <see cref="IsDarkBackground"/>'s line left the panel sitting on the
+    /// threshold, and text then measured 4.01–4.49:1 — right, in shape, and still short.</para>
+    /// <para>Pulled only as far as it takes: a user who asked for a lighter panel keeps the lightest panel that
+    /// can carry text. Shipped presets never enter the loop, since their surfaces sit near their backgrounds
+    /// by design.</para>
+    /// </remarks>
+    internal static Color PanelThatAdmitsReadableText(Color panel, Color background)
+    {
+        var extremeText = IsDarkBackground(background) ? Colors.White : Colors.Black;
+        if (ContrastAgainst(extremeText, panel) >= 4.5) return panel;
+
+        for (var step = 1; step <= 50; step++)
+        {
+            var candidate = Lerp(panel, background, step * 0.02);
+            if (ContrastAgainst(extremeText, candidate) >= 4.5) return candidate;
+        }
+
+        // The background itself, which always admits its own mode's text: the whole ramp is built from it.
+        return background;
+    }
+
+    /// <summary>
+    /// Whether a background counts as dark, for choosing which arm of the status palette to install.
+    /// </summary>
+    /// <remarks>
+    /// Perceptual luminance, not the sum of the channels. The sum treats every channel as equally bright, so
+    /// <c>#00FF00</c> summed to 255 and was classified DARK despite a relative luminance of 0.715 — the dark
+    /// status palette then put <c>WarningText #FCD34D</c> on bright green at 1.05:1. <c>#7F7F7F</c> summed to
+    /// 381 and was mis-called dark for the same reason. 0.18 is the midpoint used by the same WCAG formula
+    /// the contrast tests apply, so the classification and the assertions agree on what "dark" means.
+    /// </remarks>
+    /// <remarks>
+    /// <c>internal</c> for the same reason <see cref="Shade"/> is: it is pure, and the alternative way to
+    /// exercise it is to call <see cref="SetCustom"/>, which persists to the user's real theme file.
+    /// </remarks>
+    internal static bool IsDarkBackground(Color background) => RelativeLuminance(background) < 0.18;
+
+    private void ApplyShade()
+    {
+        CurrentTheme = Shade(_baseTheme, ShadePosition);
+        Apply(CurrentTheme);
+    }
+
+    /// <summary>
+    /// Applies the background-shade position to a preset: shifts the surfaces, then keeps the text ramp
+    /// legible against them.
+    /// </summary>
+    /// <remarks>
+    /// The slider moves <c>Background</c>, <c>Surface</c>, <c>Surface2</c> and <c>Border</c> by up to ±6%
+    /// lightness. The text ramp is seeded once, so shifting the surfaces alone narrows every text/background
+    /// pairing in the app: measured across the whole slider range, <c>TextMuted</c> fell below 4.5:1 in 12
+    /// of 60 preset × position combinations, worst 3.94:1. The popup presents the slider as harmless
+    /// personalisation, so the outcome has to be unreachable rather than merely discouraged.
+    /// <para>Two simpler fixes were measured and rejected. Shifting the ramp by <c>-offset</c> makes it
+    /// worse (13 of 60, worst 3.49) because it assumes the text is darker than its surface, which is only
+    /// true on a light preset — on a dark one the text is the lighter of the two, so darkening it closes the
+    /// gap it was meant to open. Clamping the slider cannot work either: the safe range is the lower half
+    /// for dark presets and the upper half for light ones, so the intersection across all twelve is
+    /// 0.50-0.55 and the feature would be gone.</para>
+    /// <para>Pure and static so the whole reachable range can be swept in a unit test — the instance path
+    /// writes into <c>Application.Current.Resources</c>, which a test has no business doing.</para>
+    /// </remarks>
+    internal static ThemePreset Shade(ThemePreset baseTheme, double position)
+    {
+        var offset = (position - 0.5) * 0.12;
+
+        var background = ShiftLightness(baseTheme.Background, offset);
+
+        // The panel correction runs HERE, on the shifted colours, not on the seeded ones. It was tried in
+        // CustomPreset first and the shade undid it: ShiftLightness moves Background and Surface by different
+        // amounts, so a panel corrected before the shift drifted back out of range and text measured 4.12:1 at
+        // the top of the slider while passing in the middle. This is also where Legible runs, so nothing
+        // downstream can revert either correction.
+        var shaded = baseTheme with
+        {
+            Background = background,
+            Surface = PanelThatAdmitsReadableText(ShiftLightness(baseTheme.Surface, offset), background),
+            Surface2 = PanelThatAdmitsReadableText(ShiftLightness(baseTheme.Surface2, offset), background),
+            Border = ShiftLightness(baseTheme.Border, offset)
+        };
+
+        // TextPrimary is corrected first because the two DERIVED surfaces are lerped toward it, so they
+        // cannot be computed until it is final. Derived here with the same factors Apply uses, from the
+        // shaded Surface2 and the corrected primary — which is exactly the pair Apply will be handed.
+        // Surface and Surface2 at AA alongside the Background at AAA. Every shipped preset picks a Surface
+        // close to its Background, so holding primary to the Background alone held for free and neither this
+        // correction nor ThemeTextContrastTests ever measured the rest — while Custom mode takes Background
+        // and Surface as independent hex values. Background #070A0F with Surface #FFFFFF walked primary
+        // toward WHITE, because the direction comes from the background, and put white text on a white card
+        // at 1.04:1. Cards, rows and panels are what the window mostly shows; the Background is the gap
+        // between them.
+        var primary = Legible(shaded.TextPrimary, baseTheme.IsDark,
+                              (shaded.Background, 7.0), (shaded.Surface, 4.5), (shaded.Surface2, 4.5));
+        var surface3 = Lerp(shaded.Surface2, primary, 0.05);
+        var surface4 = Lerp(shaded.Surface2, primary, 0.10);
+
+        // The floors and the surfaces each one is measured against mirror ThemeTextContrastTests exactly:
+        // this correction enforces the same contract those assertions check, rather than a second opinion
+        // about what "legible" means.
+        //
+        // Surface3/Surface4 were missing from both sides of that mirror until #1555. Measured across all
+        // twelve presets and twenty-one slider positions, the slider pushed muted text as low as 3.84:1 on
+        // Surface4 — and on warm-sand it did so from the DEFAULT position outward, so this was reachable
+        // without the user touching anything. Correcting against only the seeded rungs left the two rungs
+        // that actually carry the worst contrast unprotected.
+        return shaded with
+        {
+            TextPrimary = primary,
+            TextSecondary = Legible(shaded.TextSecondary, baseTheme.IsDark,
+                                    (shaded.Surface2, 4.5), (surface4, 4.5)),
+            TextMuted = Legible(shaded.TextMuted, baseTheme.IsDark,
+                                (shaded.Background, 4.5), (shaded.Surface, 4.5), (shaded.Surface2, 4.5),
+                                (surface3, 4.5), (surface4, 4.5))
+        };
+    }
+
+    /// <summary>
+    /// Returns <paramref name="text"/> unchanged when it already clears every target's floor, otherwise walks
+    /// it away from the surfaces until it does.
+    /// </summary>
+    /// <remarks>
+    /// Per-surface floors, because primary text owes AAA to the Background and AA to the panels drawn on top
+    /// of it, and one number cannot say both.
+    /// <para>"Away" is toward white on a dark theme and toward black on a light one, decided from the preset's
+    /// own mode rather than by comparing luminances, so a surface shifted close to the text cannot flip the
+    /// direction mid-walk. 2% steps to an 80% ceiling, matching <c>ChartTheme.ReadableAgainst</c>; every
+    /// shipped preset clears its floors in the mode's own direction, usually at step 0.</para>
+    /// <para>One direction, deliberately. Walking the other way was tried and it cannot help: a target set
+    /// that straddles the text has no solution to find — AAA against <c>#070A0F</c> needs a relative luminance
+    /// of at least 0.30 and AA against <c>#FFFFFF</c> needs at most 0.183 — so a search in either direction
+    /// lands short. That pair is prevented at the input instead, by
+    /// <see cref="PanelThatAdmitsReadableText"/>, which is where the actual defect was.</para>
+    /// </remarks>
+    private static Color Legible(Color text, bool isDark, params (Color Surface, double Minimum)[] targets)
+    {
+        var target = isDark ? Colors.White : Colors.Black;
+
+        // All the way to the extreme, not the old 80% ceiling. The ceiling was there so a pathological
+        // custom theme terminated, which the step count already guarantees, and it was the last thing keeping
+        // text short: with the panel corrected to admit this mode's extreme text, that extreme is a solution,
+        // and stopping at 80% of the way to it measured 4.45:1 where white measures 20:1. Shipped presets are
+        // unaffected — they clear their floors at step 0.
+        for (var step = 0; step <= 50; step++)
+        {
+            var candidate = Lerp(text, target, step * 0.02);
+            if (targets.All(t => ContrastAgainst(candidate, t.Surface) >= t.Minimum))
+                return candidate;
+        }
+
+        return target;
+    }
+
+    public void Apply(ThemePreset theme)
+    {
+        // No running app means no resource dictionary to repaint — a no-op, not a crash. This is the one
+        // WPF touch-point in the service; guarding it lets Load/Initialize (and thus the persistence
+        // seam) run in a headless unit test, and is harmless in production where Application.Current is
+        // always set. Without it, every public entry point NPEs the moment it is reached off the UI app.
+        if (Application.Current is null) return;
+
+        var res = Application.Current.Resources;
+        SetBrush(res, "Surface0", theme.Background);
+        SetBrush(res, "Surface1", theme.Surface);
+        SetBrush(res, "Surface2", theme.Surface2);
+        SetBrush(res, "Surface3", Lerp(theme.Surface2, theme.TextPrimary, 0.05));
+        var surface4 = Lerp(theme.Surface2, theme.TextPrimary, 0.1);
+        SetBrush(res, "Surface4", surface4);
+        SetBrush(res, "Border1", theme.Border);
+        SetBrush(res, "Border2", Lerp(theme.Border, theme.TextPrimary, 0.08));
+        SetBrush(res, "BorderAccent", Lerp(theme.Border, theme.Accent, 0.2));
+        SetBrush(res, "TextPrimary", theme.TextPrimary);
+        SetBrush(res, "TextSecondary", theme.TextSecondary);
+        SetBrush(res, "TextMuted", theme.TextMuted);
+        SetBrush(res, "TextDisabled", Lerp(theme.TextMuted, theme.Background, 0.4));
+        SetBrush(res, "Accent", theme.Accent);
+        SetBrush(res, "AccentHover", Lighten(theme.Accent, 0.15));
+        SetBrush(res, "AccentPressed", Darken(theme.Accent, 0.12));
+        SetBrush(res, "AccentSoft", Color.FromArgb(24, theme.Accent.R, theme.Accent.G, theme.Accent.B));
+
+        // The foreground for anything drawn ON the accent fill: the primary button's label, the checked
+        // mode pill's label, the checkbox tick. Those were hardcoded White, and the accent swings from
+        // indigo #6366F1 to amber #F59E0B across the presets, so white measured 2.15:1 on warm-ember and
+        // cleared AA on only two of the twelve.
+        SetBrush(res, "TextOnAccent", OnColor(theme.Accent));
+
+        // The OFF thumb of a toggle switch, drawn on the Surface4 track. It was hardcoded White, and
+        // Surface4 is near-white on the six light presets, so the thumb measured 1.33 to 1.67:1 there —
+        // the switch had no readable state at all, which is worse than a label at 2:1. The ON thumb is
+        // not this brush: the IsChecked trigger turns the track into Accent, so it uses TextOnAccent
+        // above. That split is load-bearing rather than tidy — a single brush left the ON state at
+        // 2.15:1 on warm-ember and 2.54:1 on dark-forest, a defect the light-preset audit missed
+        // because both are dark presets.
+        SetBrush(res, "ToggleThumb", OnColor(surface4));
+
+        SetColor(res, "Surface0Color", theme.Background);
+        SetColor(res, "Surface1Color", theme.Surface);
+        SetColor(res, "Surface2Color", theme.Surface2);
+        SetColor(res, "Surface3Color", Lerp(theme.Surface2, theme.TextPrimary, 0.05));
+        SetColor(res, "Surface4Color", Lerp(theme.Surface2, theme.TextPrimary, 0.1));
+        SetColor(res, "AccentColor", theme.Accent);
+        SetColor(res, "AccentHoverColor", Lighten(theme.Accent, 0.15));
+        SetColor(res, "AccentPressedColor", Darken(theme.Accent, 0.12));
+
+        // Card depth (the revamp's signature "glass depth"): a subtle top sheen + a top-lit rim.
+        // Both are theme-DERIVED so they survive all 12 presets + custom + shade, and both are pure
+        // gradient fills (no DropShadowEffect) so they stay PERF-008-safe on the many repeated cards.
+        //  - Sheen: a vertical gradient whose top is a hair lifted off the surface, fading to the flat
+        //    surface by 55% — reads as "lit from above". Lifted on dark, tinted-down on light, matching
+        //    the approved mockup's cardgrad (white-alpha on dark / dark-alpha on light).
+        //  - Rim: a vertical border gradient, brighter/darker at the very top (Lerp toward TextPrimary)
+        //    fading to the normal border by mid-height — the 1px contour highlight without a shadow.
+        var sheenTop = theme.IsDark ? Lighten(theme.Surface, 0.05) : Darken(theme.Surface, 0.02);
+        SetBrush(res, "CardSurface", VGradient((sheenTop, 0.0), (theme.Surface, 0.55)));
+        var rim = Lerp(theme.Border, theme.TextPrimary, 0.22);
+        SetBrush(res, "CardRim", VGradient((rim, 0.0), (theme.Border, 0.5)));
+
+        // Row hover — a neutral tint, deliberately distinct from the accent-tinted selection
+        // (AccentSoft). Before, DataGrid rows used AccentSoft for BOTH hover and selection, so hovering
+        // any row made it look selected. This is a lift off the surface (toward TextPrimary),
+        // theme-derived so it works on light presets too.
+        //
+        // The factor is well above the 0.05 it shipped with: composited, 0.05 measured 1.11:1 against the
+        // surface it sits on, which is below the perceptual threshold on a typical laptop panel in a bright
+        // room. Hover is the ONLY affordance signal on the sidebar rows — they have no button chrome — so an
+        // imperceptible one means the app never shows what is clickable (#1540).
+        SetBrush(res, "RowHover", Lerp(theme.Surface, theme.TextPrimary, RowHoverLerp(theme.IsDark)));
+
+        // The hover MARK: a 3px bar on the left edge of a hovered sidebar row, which is what actually
+        // carries the contrast. A background tint cannot reach WCAG 1.4.11's 3:1 on a dark theme without
+        // becoming a different colour — at alpha 64 the accent wash tops out at 1.32:1 — whereas a solid
+        // bar is 6.05:1 or better on every preset measured.
+        //
+        // TextMuted rather than Accent, and that is the whole point: the SELECTED row already draws a 3px
+        // Accent bar in the same position (SidebarActiveMark in MainWindow.xaml), so an accent hover bar
+        // would make pointing at a row look exactly like having opened it — the same confusion this
+        // codebase already fixed once when hover and selection both used AccentSoft. Neutral bar for
+        // hover, accent bar for selection: they differ in colour as well as in wash strength.
+        SetBrush(res, "RowHoverMark", RowHoverMarkColor(theme));
+
+        ApplyStatusBrushes(res, theme.IsDark);
+
+        ThemeChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// How far <c>RowHover</c> lifts the surface toward the text colour, by mode.
+    /// </summary>
+    /// <remarks>
+    /// Two factors rather than one, because contrast ratio is not symmetric: lightening a dark surface by
+    /// 15% yields 1.43–1.52:1 across the dark presets, while darkening a light surface by the same 15% only
+    /// yields 1.27–1.35:1 — the light presets came out a third weaker for the identical arithmetic. A single
+    /// factor large enough for them (0.22) would push the dark presets to 1.9:1, a heavier wash than the
+    /// design called for. 0.25 on light lands them at 1.52–1.68, the same band.
+    /// <para>Internal so <c>ThemeTextContrastTests</c> asserts the floors against THIS method rather than a
+    /// copy of the numbers. A test that restates the factor stops testing the moment the service changes it.
+    /// The precedent is <c>ApplyStatusBrushes(res, theme.IsDark)</c>, which is mode-dependent for the same
+    /// kind of reason.</para>
+    /// </remarks>
+    internal static double RowHoverLerp(bool isDark) => isDark ? 0.15 : 0.25;
+
+    /// <summary>The colour of the 3px bar on a hovered row.</summary>
+    /// <remarks>
+    /// A named method for one property access, and it earns that: it is what the contrast tests assert
+    /// against. Asserting <c>TextMuted != Accent</c> on the palette instead would pass unchanged if this were
+    /// repointed AT the accent, which is precisely the regression worth catching — the selected row draws an
+    /// Accent bar in the same 3px, so hover would become indistinguishable from selected.
+    /// </remarks>
+    internal static Color RowHoverMarkColor(ThemePreset theme) => theme.TextMuted;
+
+    /// <summary>
+    /// Builds a frozen top-to-bottom <see cref="LinearGradientBrush"/> from the given color/offset
+    /// stops (StartPoint 0.5,0 → EndPoint 0.5,1). Used for the card sheen + rim-light; the last stop's
+    /// color holds to the bottom edge. Frozen so it is shareable and cheap across many cards.
+    /// </summary>
+    private static LinearGradientBrush VGradient(params (Color Color, double Offset)[] stops)
+    {
+        var brush = new LinearGradientBrush { StartPoint = new(0.5, 0), EndPoint = new(0.5, 1) };
+        foreach (var (color, offset) in stops)
+            brush.GradientStops.Add(new GradientStop(color, offset));
+        brush.Freeze();
+        return brush;
+    }
+
+    private static void SetBrush(ResourceDictionary res, string key, Brush brush)
+    {
+        if (brush.CanFreeze) brush.Freeze();
+        res[key] = brush;
+    }
+
+    /// <summary>
+    /// Recomputes the semantic status brushes (Warning / Success / Info / Danger) for the current
+    /// mode. The App.xaml defaults are calibrated for dark surfaces — pale, high-lightness text
+    /// (e.g. WarningText #FCD34D) that reads on a near-black banner but washes out to illegible on a
+    /// light preset's near-white surface. On light themes we swap to darker, saturated text colors
+    /// that meet WCAG AA on white, and lift the subtle background tints so the banner is still
+    /// distinguishable. On dark themes we restore the original palette so nothing changes there.
+    /// This is the single seam that fixes every hardcoded-warning-banner contrast defect at once.
+    /// </summary>
+    private static void ApplyStatusBrushes(ResourceDictionary res, bool isDark)
+    {
+        foreach (var (key, color) in StatusPalette(isDark))
+            SetBrush(res, key, color);
+
+        SetBrush(res, "TextOnDanger", TextOnDanger(isDark));
+    }
+
+    /// <summary>
+    /// The legible foreground for the Danger fill in the given mode, for <c>DangerButton</c>'s label.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the palette rather than listed beside it, so retuning Danger carries its paired
+    /// foreground along instead of silently stranding it at a choice made for the old value.
+    /// <para>It has to be per-mode: white on the dark-mode <c>#EF4444</c> is 3.76:1 — below the 4.5:1 a
+    /// 13px SemiBold label needs — while white on the light-mode <c>#B91C1C</c> is 6.47:1 and correct.
+    /// One constant cannot serve both.</para>
+    /// </remarks>
+    internal static Color TextOnDanger(bool isDark) =>
+        OnColor(StatusPalette(isDark).First(entry => entry.Key == "Danger").Color);
+
+    /// <summary>
+    /// Black or white, whichever contrasts more against <paramref name="background"/> — the standard
+    /// WCAG-driven "on colour" rule for text or a mark drawn on a filled surface.
+    /// </summary>
+    /// <remarks>
+    /// Pure black, not a softened near-black. #1A1A1A was the first choice, because pure black can read
+    /// as harsh on a saturated fill, but it does not clear the bar: against the default accent #6366F1 it
+    /// measures 3.90:1 while white measures 4.47:1, so NEITHER reaches 4.5 and the app's own signature
+    /// colour would still fail. With pure black every preset clears it, the worst case being 4.60:1.
+    /// <para>Deliberately a local contrast implementation rather than one shared with the tests.
+    /// <c>ThemeStatusBrushTests</c> and <c>ThemeTextContrastTests</c> keep their own, so a mistake in this
+    /// formula shows up as a failing assertion instead of being cancelled out by a shared bug. The other
+    /// copy, <c>ChartTheme.Contrast</c>, is typed for SkiaSharp's SKColor and belongs to the chart stack.</para>
+    /// </remarks>
+    internal static Color OnColor(Color background) =>
+        ContrastAgainst(Colors.White, background) >= ContrastAgainst(Colors.Black, background)
+            ? Colors.White
+            : Colors.Black;
+
+    /// <summary>WCAG 2.x relative-luminance contrast ratio between two opaque colours.</summary>
+    private static double ContrastAgainst(Color a, Color b)
+    {
+        var (la, lb) = (RelativeLuminance(a), RelativeLuminance(b));
+        return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+    }
+
+    private static double RelativeLuminance(Color c)
+    {
+        static double Channel(byte v)
+        {
+            var s = v / 255.0;
+            return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4);
+        }
+
+        return (0.2126 * Channel(c.R)) + (0.7152 * Channel(c.G)) + (0.0722 * Channel(c.B));
+    }
+
+    /// <summary>
+    /// Pure color decision for the semantic status brushes, split out so it is unit-testable without
+    /// a WPF Application (the actual brush assignment writes into Application.Current.Resources).
+    /// Dark values mirror the App.xaml defaults; light values are darker, saturated text that meets
+    /// WCAG AA against a near-white surface, with tints lifted so the banner still reads as coloured.
+    /// </summary>
+    public static IReadOnlyList<(string Key, Color Color)> StatusPalette(bool isDark) => isDark
+        ?
+        [
+            ("WarningText", C("#FCD34D")), ("WarningBgSubtle", C("#1AFBBF24")),
+            ("WarningBg", C("#40FBBF24")), ("WarningStripe", C("#FBBF24")),
+            // WarningBorder completes the family: Success, Info and Danger each had a Border and Warning
+            // did not, so the one badge tinted amber had to keep a literal where its three neighbours
+            // could use a brush.
+            ("WarningBorder", C("#33FBBF24")),
+            ("SuccessText", C("#4ADE80")), ("SuccessBgSubtle", C("#1A22C55E")), ("SuccessBorder", C("#3322C55E")),
+            ("InfoText", C("#7DD3FC")), ("InfoBgSubtle", C("#1A38BDF8")), ("InfoBorder", C("#3338BDF8")),
+            ("DangerText", C("#F87171")), ("DangerBgSubtle", C("#1AEF4444")), ("DangerBorder", C("#33EF4444")),
+
+            // Critical severity (LogsView): a distinct, hotter red than Danger. Dark values mirror the
+            // previous hardcoded #FF3B30 literals so dark themes are unchanged; the light array darkens
+            // them for AA legibility on near-white surfaces (the Critical card used to stay invisible).
+            ("CriticalText", C("#FF3B30")), ("CriticalBgSubtle", C("#14FF3B30")),
+            // WindowsUpdate category badges: Driver/.NET/Feature-upgrade have no semantic equivalent,
+            // so they get their own per-preset brushes (Security/Defender/Servicing reuse Danger/Success/
+            // Info text). Dark = the previous hardcoded Tailwind-300 tints; light darkened for AA.
+            ("BadgeIndigoText", C("#A5B4FC")), ("BadgePurpleText", C("#D8B4FE")), ("BadgePinkText", C("#F9A8D4")),
+            // …and the fills behind that text, which stayed hardcoded when the text was migrated. The
+            // badge kept an 8%-alpha dark-calibrated tint on every light preset, so on light themes the
+            // text correctly darkened to indigo-700/purple-700/pink-800 while its background did not
+            // follow — the Category column lost the colour-coding that makes it scannable.
+            // One NEUTRAL family covers three rows that used two different slates (#475569 for "no
+            // category matched", #94A3B8 for Hidden and History). At 8% alpha over the same surface the
+            // two are indistinguishable, so keeping them apart bought a distinction nobody can see.
+            ("BadgeIndigoBgSubtle", C("#1A6366F1")), ("BadgeIndigoBorder", C("#336366F1")),
+            ("BadgePurpleBgSubtle", C("#1AA855F7")), ("BadgePurpleBorder", C("#33A855F7")),
+            ("BadgePinkBgSubtle", C("#1AEC4899")), ("BadgePinkBorder", C("#33EC4899")),
+            ("BadgeNeutralBgSubtle", C("#1A94A3B8")), ("BadgeNeutralBorder", C("#3394A3B8")),
+
+            // Base semantic brushes (used directly as small-text Foreground / dot Fill across the app,
+            // e.g. Cleanup's TEMP-folders stat). These were static App.xaml resources that never
+            // recomputed per mode, so their light-cyan/green/amber/red washed out on near-white light
+            // surfaces. Dark values mirror the App.xaml defaults exactly (no visual change on dark).
+            ("Info", C("#38BDF8")), ("Success", C("#22C55E")), ("Warning", C("#F59E0B")), ("Danger", C("#EF4444")),
+
+            // Console output palette (ConsoleView). Also static-only before, so light-theme consoles
+            // rendered near-invisible pale-grey body text on their near-white card. Dark values mirror
+            // the App.xaml defaults (no visual change on dark).
+            ("OutOutputBrush", C("#E6E6E6")), ("OutVerboseBrush", C("#9AA0A6")),
+            ("OutInfoBrush", C("#38BDF8")), ("OutWarnBrush", C("#FBBF24")), ("OutErrorBrush", C("#F87171")),
+            ("OutDebugBrush", C("#B388FF")), ("OutProgressBrush", C("#4ADE80")),
+
+            // Dashboard metric accents. The last two App.xaml brushes that were never re-themed, so a
+            // light preset kept these dark-theme mid-tones while the sibling CPU card used the
+            // mode-aware Success brush — one crisp card beside two washed-out ones. Dark values mirror
+            // App.xaml exactly (no visual change on dark).
+            ("MetricBlue", C("#3B82F6")), ("MetricPurple", C("#A855F7")),
+        ]
+        :
+        [
+            ("WarningText", C("#92400E")), ("WarningBgSubtle", C("#26FBBF24")),   // amber-800 text — AA on white
+            ("WarningBg", C("#40FBBF24")), ("WarningStripe", C("#D97706")),
+            ("WarningBorder", C("#55FBBF24")),
+            ("SuccessText", C("#15803D")), ("SuccessBgSubtle", C("#2622C55E")), ("SuccessBorder", C("#5522C55E")),
+            ("InfoText", C("#0369A1")), ("InfoBgSubtle", C("#2638BDF8")), ("InfoBorder", C("#5538BDF8")),
+            ("DangerText", C("#B91C1C")), ("DangerBgSubtle", C("#26EF4444")), ("DangerBorder", C("#55EF4444")),
+
+            // Critical severity (LogsView) — darker red than dark-mode so the Critical card/dot stay AA
+            // on the tinted light surfaces (was a fixed #FF3B30 that washed out); BgSubtle bumped alpha.
+            ("CriticalText", C("#B01508")), ("CriticalBgSubtle", C("#20FF3B30")),
+            // Category badges darkened for AA on light presets (indigo-700 / purple-700 / pink-800).
+            // pink-800 #9D174D (not pink-700) clears 4.5:1 on the most-tinted light surface #FBCFE8.
+            ("BadgeIndigoText", C("#4338CA")), ("BadgePurpleText", C("#7E22CE")), ("BadgePinkText", C("#9D174D")),
+            // Badge fills on light: the same hue at higher alpha, which is the convention the existing
+            // light entries already follow (light SuccessBgSubtle is #2622C55E against dark's #1A22C55E —
+            // same green, more of it). An 8%-alpha tint over a near-white surface is essentially
+            // invisible, which is exactly why these could not simply be shared with the dark array.
+            ("BadgeIndigoBgSubtle", C("#266366F1")), ("BadgeIndigoBorder", C("#556366F1")),
+            ("BadgePurpleBgSubtle", C("#26A855F7")), ("BadgePurpleBorder", C("#55A855F7")),
+            ("BadgePinkBgSubtle", C("#26EC4899")), ("BadgePinkBorder", C("#55EC4899")),
+            ("BadgeNeutralBgSubtle", C("#2694A3B8")), ("BadgeNeutralBorder", C("#5594A3B8")),
+
+            // Light: darker, saturated tones that meet WCAG AA as SMALL text — not just on pure white,
+            // but on the most-tinted light preset card surface (soft-blossom Surface2 #FBCFE8 is the
+            // worst case). Info #075985 / Success #166534 / Warning #9A3412 all clear 4.5:1 there;
+            // Danger #B91C1C already did. (Earlier values passed on #FFFFFF but dipped to ~3.6-4.3 on
+            // the pastel presets — see ThemeStatusBrushTests, which now asserts against the tinted surface.)
+            ("Info", C("#075985")), ("Success", C("#166534")), ("Warning", C("#9A3412")), ("Danger", C("#B91C1C")),
+
+            // Dashboard metric accents on light: blue-700 / purple-700, the same step already used for
+            // BadgeIndigoText / BadgePurpleText above. These are NON-TEXT marks — a ProgressBar fill and
+            // a 6px dot — so the bar is WCAG 1.4.11's 3:1 against their own Surface3 track, which the
+            // frozen dark tints missed badly (MetricBlue read 2.42:1 on soft-blossom). -700 rather than
+            // -800 keeps the hue identity: the 26px number must still read as "a blue metric", not black.
+            ("MetricBlue", C("#1D4ED8")), ("MetricPurple", C("#7E22CE")),
+
+            // Console on light: dark-on-white body/verbose text; semantic lines reuse the AA light tones.
+            ("OutOutputBrush", C("#1E1B4B")), ("OutVerboseBrush", C("#475569")),
+            ("OutInfoBrush", C("#075985")), ("OutWarnBrush", C("#9A3412")), ("OutErrorBrush", C("#B91C1C")),
+            ("OutDebugBrush", C("#6D28D9")), ("OutProgressBrush", C("#166534")),
+        ];
+
+    private static Color C(string hex) => (Color)ColorConverter.ConvertFromString(hex);
+
+    private static void SetBrush(ResourceDictionary res, string key, Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        res[key] = brush;
+    }
+
+    private static void SetColor(ResourceDictionary res, string key, Color color)
+    {
+        res[key] = color;
+    }
+
+    private static Color Lerp(Color a, Color b, double t)
+    {
+        return Color.FromArgb(
+            (byte)(a.A + (b.A - a.A) * t),
+            (byte)(a.R + (b.R - a.R) * t),
+            (byte)(a.G + (b.G - a.G) * t),
+            (byte)(a.B + (b.B - a.B) * t));
+    }
+
+    private static Color Lighten(Color c, double amount)
+    {
+        return Color.FromArgb(c.A,
+            (byte)Math.Min(255, c.R + (255 - c.R) * amount),
+            (byte)Math.Min(255, c.G + (255 - c.G) * amount),
+            (byte)Math.Min(255, c.B + (255 - c.B) * amount));
+    }
+
+    private static Color Darken(Color c, double amount)
+    {
+        return Color.FromArgb(c.A,
+            (byte)(c.R * (1 - amount)),
+            (byte)(c.G * (1 - amount)),
+            (byte)(c.B * (1 - amount)));
+    }
+
+    private static Color ShiftLightness(Color c, double amount)
+    {
+        if (amount >= 0)
+            return Lighten(c, amount);
+        return Darken(c, -amount);
+    }
+
+    private void Save()
+    {
+        if (_unreadAtLoad)
+        {
+            Log.Debug("Theme not saved: the file could not be read when it was loaded");
+            return;
+        }
+        if (_unparsableAtLoad && !StoreFile.SetAside(_settingsPath)) return;
+        _unparsableAtLoad = false;
+
+        try
+        {
+            var dir = Path.GetDirectoryName(_settingsPath)!;
+            Directory.CreateDirectory(dir);
+            // _baseTheme, NOT CurrentTheme. CurrentTheme is a pure function of (_baseTheme, ShadePosition)
+            // and must never become an input to itself. Persisting the derived theme made a custom one
+            // degrade a little on every launch: Load's custom branch feeds these four colours back in as the
+            // new base, so the shade offset re-applied to already-shifted surfaces, and Legible() re-walked
+            // an already-walked TextPrimary. At a non-default slider position the surfaces drifted until
+            // IsDarkBackground flipped; even at the default position the text marched, because Legible walks
+            // whenever it misses 7:1 and the walked value was what got saved.
+            var data = new ThemeSettings(CurrentPresetId, CurrentMode, ShadePosition,
+                _baseTheme.Accent.ToString(), _baseTheme.Background.ToString(),
+                _baseTheme.Surface.ToString(), _baseTheme.TextPrimary.ToString());
+            var json = JsonSerializer.Serialize(data, JsonDefaults.Indented);
+            AtomicFile.WriteAllText(_settingsPath, json);
+        }
+        catch (Exception ex) { Log.Debug("Theme save failed: {Error}", ex.Message); }
+    }
+
+    private void Load()
+    {
+        var json = StoreFile.ReadText(_settingsPath);
+        _unreadAtLoad = json is null;
+        _unparsableAtLoad = false;
+        if (string.IsNullOrWhiteSpace(json)) return;
+
+        try
+        {
+            var data = JsonSerializer.Deserialize<ThemeSettings>(json);
+            if (data is null) return;
+
+            CurrentMode = data.Mode;
+            ShadePosition = data.ShadePosition;
+            CurrentPresetId = data.PresetId;
+
+            if (data.PresetId == "custom")
+            {
+                var accent = (Color)ColorConverter.ConvertFromString(data.Accent);
+                var bg = (Color)ColorConverter.ConvertFromString(data.Background);
+                var surface = (Color)ColorConverter.ConvertFromString(data.Surface);
+                var text = (Color)ColorConverter.ConvertFromString(data.Text);
+                SetCustom(accent, bg, surface, text);
+            }
+            else if (ThemePreset.Defaults.TryGetValue(data.PresetId, out var preset))
+            {
+                _baseTheme = preset;
+                CurrentTheme = preset;
+                ApplyShade();
+            }
+        }
+        // Broad, as it was: this runs at startup on a file the user can edit, and whatever fails in here (JSON that
+        // does not parse, a colour that does not convert, a value that is missing) means the same thing. The file
+        // is not a theme SysManager can use, so the shipped theme stays on screen and the file is set aside rather
+        // than written over.
+        catch (Exception ex)
+        {
+            Log.Debug("Theme load failed: {Error}", ex.Message);
+            _unparsableAtLoad = true;
+        }
+    }
+
+    private sealed record ThemeSettings(
+        string PresetId, string Mode, double ShadePosition,
+        string Accent, string Background, string Surface, string Text);
+}
+
+public sealed record ThemePreset(
+    string Id,
+    string Name,
+    bool IsDark,
+    Color Accent,
+    Color Background,
+    Color Surface,
+    Color Surface2,
+    Color Border,
+    Color TextPrimary,
+    Color TextSecondary,
+    Color TextMuted)
+{
+    public static readonly Dictionary<string, ThemePreset> Defaults = new()
+    {
+        ["midnight-indigo"] = new("midnight-indigo", "Midnight Indigo", true,
+            C("#6366F1"), C("#070A0F"), C("#0E1218"), C("#151A23"), C("#1F2633"),
+            C("#F1F3F7"), C("#A3ADBF"), C("#9097A7")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #7B8396, 4.09 / 3.53)
+        ["deep-ocean"] = new("deep-ocean", "Deep Ocean", true,
+            C("#3B82F6"), C("#050D1A"), C("#0A1628"), C("#0F1D33"), C("#1A2D4D"),
+            C("#E2E8F0"), C("#94A3B8"), C("#8D9AAC")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #78879B, 4.11 / 3.59)
+        ["dark-forest"] = new("dark-forest", "Dark Forest", true,
+            C("#10B981"), C("#020F0A"), C("#021A12"), C("#03261A"), C("#0A3D2A"),
+            C("#D1FAE5"), C("#6EE7B7"), C("#34D399")),
+        ["neon-rose"] = new("neon-rose", "Neon Rose", true,
+            C("#EC4899"), C("#120508"), C("#1A0A0F"), C("#240E16"), C("#3D1525"),
+            C("#FDF2F8"), C("#F9A8D4"), C("#F472B6")),
+        ["violet-night"] = new("violet-night", "Violet Night", true,
+            C("#A855F7"), C("#0A0515"), C("#0F0A1A"), C("#160F26"), C("#2D1B4E"),
+            C("#F3E8FF"), C("#C4B5FD"), C("#A078F7")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #8E60F6, 4.14 / 3.62)
+        ["warm-ember"] = new("warm-ember", "Warm Ember", true,
+            C("#F59E0B"), C("#0F0A04"), C("#1A1008"), C("#24180C"), C("#3D2A12"),
+            C("#FEF3C7"), C("#FCD34D"), C("#FBBF24")),
+        ["clean-indigo"] = new("clean-indigo", "Clean Indigo", false,
+            C("#6366F1"), C("#FFFFFF"), C("#F8FAFC"), C("#F1F5F9"), C("#E2E8F0"),
+            C("#1E1B4B"), C("#4338CA"), C("#5153C6")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #5D5FE2, 4.14 / 3.74)
+        ["sky-breeze"] = new("sky-breeze", "Sky Breeze", false,
+            C("#0EA5E9"), C("#F8FAFC"), C("#F0F9FF"), C("#E0F2FE"), C("#BAE6FD"),
+            // The only preset needing BOTH tiers re-seeded: secondary was 4.39 on Surface4 (was #0369A1).
+            C("#0C4A6E"), C("#02669D"), C("#04679A")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #0572AB, 4.20 / 3.88)
+        ["warm-sand"] = new("warm-sand", "Warm Sand", false,
+            C("#D97706"), C("#FFFBEB"), C("#FEF3C7"), C("#FDE68A"), C("#FCD34D"),
+            C("#451A03"), C("#78350F"), C("#92400E")),
+        ["mint-fresh"] = new("mint-fresh", "Mint Fresh", false,
+            C("#16A34A"), C("#F0FDF4"), C("#DCFCE7"), C("#BBF7D0"), C("#86EFAC"),
+            C("#14532D"), C("#166534"), C("#136C34")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #15783A, 4.22 / 3.91)
+        ["soft-blossom"] = new("soft-blossom", "Soft Blossom", false,
+            C("#DB2777"), C("#FDF2F8"), C("#FCE7F3"), C("#FBCFE8"), C("#F9A8D4"),
+            C("#500724"), C("#831843"), C("#9D174D")),
+        ["lavender"] = new("lavender", "Lavender", false,
+            C("#7C3AED"), C("#FAF5FF"), C("#F3E8FF"), C("#E9D5FF"), C("#D8B4FE"),
+            C("#2E1065"), C("#4C1D95"), C("#5B21B6")),
+    };
+
+    private static Color C(string hex) => (Color)ColorConverter.ConvertFromString(hex);
+}

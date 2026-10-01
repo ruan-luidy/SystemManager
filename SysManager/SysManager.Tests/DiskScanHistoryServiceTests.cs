@@ -3,8 +3,9 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.DiskAnalyzer;
+using SysManager.Features.DiskAnalyzer.Models;
+using SysManager.Features.DiskAnalyzer.Services;
 
 namespace SysManager.Tests;
 

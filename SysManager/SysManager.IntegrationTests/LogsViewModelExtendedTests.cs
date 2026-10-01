@@ -3,9 +3,9 @@
 // License: MIT
 
 using System.Reflection;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.Logs;
+using SysManager.Features.Logs.Services;
+using SysManager.Shared.Models;
 
 namespace SysManager.IntegrationTests;
 

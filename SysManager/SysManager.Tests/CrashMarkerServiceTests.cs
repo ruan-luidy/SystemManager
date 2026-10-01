@@ -3,7 +3,8 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Services;
+using SysManager.Features.Dashboard;
+using SysManager.Features.Dashboard.Services;
 
 namespace SysManager.Tests;
 

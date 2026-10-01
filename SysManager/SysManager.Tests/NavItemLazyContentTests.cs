@@ -4,7 +4,8 @@
 
 using System.IO;
 using System.Windows.Shell;
-using SysManager.ViewModels;
+using SysManager.Shared;
+using SysManager.Shell;
 
 namespace SysManager.Tests;
 

@@ -3,9 +3,11 @@
 // License: MIT
 
 using System.Reflection;
-using SysManager.Helpers;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.WindowsUpdate;
+using SysManager.Features.WindowsUpdate.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 
@@ -229,7 +231,7 @@ public class WindowsUpdateViewModelTests
             var del = (MulticastDelegate?)ev?.GetValue(runner);
             Assert.NotNull(del);
 
-            del!.DynamicInvoke(Models.PowerShellLine.Output("wu test"));
+            del!.DynamicInvoke(PowerShellLine.Output("wu test"));
 
             Assert.Contains(vm.Console.Lines, line => line.Text.Contains("wu test", StringComparison.Ordinal));
         });

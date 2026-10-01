@@ -4,9 +4,10 @@
 
 using System.IO;
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.AppUpdates;
+using SysManager.Features.Profile;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -202,13 +203,7 @@ public class SelectionSurvivesRescanPart2Tests
     {
         // ProfileService is concrete, so the call site is asserted in the source. Order matters as much as
         // the call: after ReplaceWith the previous ticks are already gone.
-        var dir = new DirectoryInfo(Path.GetDirectoryName(typeof(ConfigSection).Assembly.Location)!);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "ViewModels")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-
-        var source = File.ReadAllText(Path.Combine(
-            dir!.FullName, "SysManager", "ViewModels", "ProfileViewModel.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("ViewModels", "ProfileViewModel.cs"));
 
         var call = source.IndexOf("CarryForwardSelection(Sections,", StringComparison.Ordinal);
         Assert.True(call > 0,

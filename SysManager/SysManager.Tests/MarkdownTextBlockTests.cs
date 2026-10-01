@@ -4,7 +4,8 @@
 
 using System.Windows.Controls;
 using System.Windows.Documents;
-using SysManager.Helpers;
+using SysManager.Features.About;
+using SysManager.Features.About.Helpers;
 using Xunit;
 
 namespace SysManager.Tests;

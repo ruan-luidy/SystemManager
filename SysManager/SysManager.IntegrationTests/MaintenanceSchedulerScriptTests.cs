@@ -2,7 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Services;
+using SysManager.Features.ScheduledMaintenance;
+using SysManager.Features.ScheduledMaintenance.Services;
 
 namespace SysManager.IntegrationTests;
 

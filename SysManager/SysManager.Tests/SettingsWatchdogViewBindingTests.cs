@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Xml.Linq;
+using SysManager.Features.SettingsWatchdog;
 
 namespace SysManager.Tests;
 

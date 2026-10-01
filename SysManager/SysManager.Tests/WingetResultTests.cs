@@ -3,7 +3,7 @@
 // License: MIT
 
 using System.Reflection;
-using SysManager.Models;
+using SysManager.Shared.Models;
 
 namespace SysManager.Tests;
 

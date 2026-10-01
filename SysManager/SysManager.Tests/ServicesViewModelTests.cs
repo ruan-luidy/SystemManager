@@ -5,10 +5,11 @@
 using System.IO;
 using System.Reflection;
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.WindowsServices;
+using SysManager.Features.WindowsServices.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -28,16 +29,16 @@ public class ServicesViewModelTests
 {
     private static readonly List<ServiceEntry> TestServices = new()
     {
-        new() { Name = "wuauserv", DisplayName = "Windows Update", Description = "Manages Windows updates", Status = "Running", StartType = "Automatic", Recommendation = "keep-enabled", SafetyLevel = Models.SafetyLevel.Caution },
-        new() { Name = "Spooler", DisplayName = "Print Spooler", Description = "Manages print jobs", Status = "Running", StartType = "Automatic", Recommendation = "safe-to-disable", SafetyLevel = Models.SafetyLevel.Caution },
-        new() { Name = "XboxGipSvc", DisplayName = "Xbox Accessory Management", Description = "Manages Xbox accessories", Status = "Stopped", StartType = "Manual", Recommendation = "safe-to-disable", SafetyLevel = Models.SafetyLevel.Safe },
-        new() { Name = "WSearch", DisplayName = "Windows Search", Description = "Provides content indexing", Status = "Running", StartType = "Automatic", Recommendation = "advanced", SafetyLevel = Models.SafetyLevel.Caution },
-        new() { Name = "BITS", DisplayName = "Background Intelligent Transfer", Description = "Transfers files in background", Status = "Stopped", StartType = "Manual", Recommendation = "keep-enabled", SafetyLevel = Models.SafetyLevel.Critical },
+        new() { Name = "wuauserv", DisplayName = "Windows Update", Description = "Manages Windows updates", Status = "Running", StartType = "Automatic", Recommendation = "keep-enabled", SafetyLevel = SafetyLevel.Caution },
+        new() { Name = "Spooler", DisplayName = "Print Spooler", Description = "Manages print jobs", Status = "Running", StartType = "Automatic", Recommendation = "safe-to-disable", SafetyLevel = SafetyLevel.Caution },
+        new() { Name = "XboxGipSvc", DisplayName = "Xbox Accessory Management", Description = "Manages Xbox accessories", Status = "Stopped", StartType = "Manual", Recommendation = "safe-to-disable", SafetyLevel = SafetyLevel.Safe },
+        new() { Name = "WSearch", DisplayName = "Windows Search", Description = "Provides content indexing", Status = "Running", StartType = "Automatic", Recommendation = "advanced", SafetyLevel = SafetyLevel.Caution },
+        new() { Name = "BITS", DisplayName = "Background Intelligent Transfer", Description = "Transfers files in background", Status = "Stopped", StartType = "Manual", Recommendation = "keep-enabled", SafetyLevel = SafetyLevel.Critical },
     };
 
     private static async Task<ServicesViewModel> CreateWithDataAsync(List<ServiceEntry>? services = null)
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = new ServicesViewModel(new PowerShellRunner());
 
         // Wait for initialization BEFORE seeding. The constructor starts InitAsync, whose
         // RefreshAsync does `_allServices = await Task.Run(ServiceManagerService.GetAllServices)`
@@ -67,14 +68,14 @@ public class ServicesViewModelTests
     [Fact]
     public void Constructor_Collections_NotNull()
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = new ServicesViewModel(new PowerShellRunner());
         Assert.NotNull(vm.Services);
     }
 
     [Fact]
     public void Constructor_FilterOptions_ContainsExpected()
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = new ServicesViewModel(new PowerShellRunner());
         Assert.Contains("All", vm.FilterOptions);
         Assert.Contains("Running", vm.FilterOptions);
         Assert.Contains("Stopped", vm.FilterOptions);
@@ -86,21 +87,21 @@ public class ServicesViewModelTests
     [Fact]
     public void Constructor_DefaultFilter_Empty()
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = new ServicesViewModel(new PowerShellRunner());
         Assert.Equal("", vm.FilterText);
     }
 
     [Fact]
     public void Constructor_DefaultSelectedFilter_All()
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = new ServicesViewModel(new PowerShellRunner());
         Assert.Equal("All", vm.SelectedFilter);
     }
 
     [Fact]
     public void Constructor_Commands_Exist()
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = new ServicesViewModel(new PowerShellRunner());
         Assert.NotNull(vm.RefreshCommand);
         Assert.NotNull(vm.StartServiceCommand);
         Assert.NotNull(vm.StopServiceCommand);
@@ -142,7 +143,7 @@ public class ServicesViewModelTests
     {
         var vm = await CreateWithDataAsync();
         vm.SelectedFilter = "Safe";
-        Assert.All(vm.Services, s => Assert.Equal(Models.SafetyLevel.Safe, s.SafetyLevel));
+        Assert.All(vm.Services, s => Assert.Equal(SafetyLevel.Safe, s.SafetyLevel));
         Assert.Single(vm.Services);
     }
 
@@ -151,7 +152,7 @@ public class ServicesViewModelTests
     {
         var vm = await CreateWithDataAsync();
         vm.SelectedFilter = "Safe";
-        Assert.All(vm.Services, s => Assert.Equal(Models.SafetyLevel.Safe, s.SafetyLevel));
+        Assert.All(vm.Services, s => Assert.Equal(SafetyLevel.Safe, s.SafetyLevel));
     }
 
     // ── ApplyFilter: gaming recommendation ──
@@ -185,7 +186,7 @@ public class ServicesViewModelTests
         vm.SelectedFilter = "Safe to disable";
 
         Assert.Contains(vm.Services, s => s.Name == "Spooler");
-        Assert.Contains(vm.Services, s => s.SafetyLevel == Models.SafetyLevel.Caution);
+        Assert.Contains(vm.Services, s => s.SafetyLevel == SafetyLevel.Caution);
     }
 
     // ── Every filter must be SELECTABLE, not merely implemented ───────────────────────────────────
@@ -213,7 +214,7 @@ public class ServicesViewModelTests
 
         Assert.NotEmpty(chipValues);   // else this would pass by finding nothing
 
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = new ServicesViewModel(new PowerShellRunner());
         var missing = vm.FilterOptions.Except(chipValues, StringComparer.Ordinal).ToList();
 
         Assert.True(missing.Count == 0,
@@ -270,9 +271,9 @@ public class ServicesViewModelTests
         // mid-transition — the chip would promise more rows than the filter returns.
         var entries = new List<ServiceEntry>
         {
-            new() { Name = "a", DisplayName = "A", Description = "", Status = "Running", StartType = "Automatic", Recommendation = "", SafetyLevel = Models.SafetyLevel.Safe },
-            new() { Name = "b", DisplayName = "B", Description = "", Status = "Stopped", StartType = "Manual", Recommendation = "", SafetyLevel = Models.SafetyLevel.Safe },
-            new() { Name = "c", DisplayName = "C", Description = "", Status = "StartPending", StartType = "Automatic", Recommendation = "", SafetyLevel = Models.SafetyLevel.Safe },
+            new() { Name = "a", DisplayName = "A", Description = "", Status = "Running", StartType = "Automatic", Recommendation = "", SafetyLevel = SafetyLevel.Safe },
+            new() { Name = "b", DisplayName = "B", Description = "", Status = "Stopped", StartType = "Manual", Recommendation = "", SafetyLevel = SafetyLevel.Safe },
+            new() { Name = "c", DisplayName = "C", Description = "", Status = "StartPending", StartType = "Automatic", Recommendation = "", SafetyLevel = SafetyLevel.Safe },
         };
         var vm = await CreateWithDataAsync(entries);
 
@@ -299,7 +300,7 @@ public class ServicesViewModelTests
 
         Assert.Equal(["advanced", "keep-enabled", "safe-to-disable"], produced);
 
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = new ServicesViewModel(new PowerShellRunner());
         Assert.Contains("Safe to disable", vm.FilterOptions);
         Assert.Contains("Keep enabled", vm.FilterOptions);
         Assert.Contains("Advanced", vm.FilterOptions);
@@ -431,7 +432,7 @@ public class ServicesViewModelTests
             DisplayName = "Remote Procedure Call (RPC)",
             Status = "Running",
             StartType = "Automatic",
-            SafetyLevel = Models.SafetyLevel.Critical,
+            SafetyLevel = SafetyLevel.Critical,
             SafetyDescription = "Core Windows IPC. System will not function without it."
         };
         var vm = await CreateWithDataAsync(new List<ServiceEntry> { critical });
@@ -466,7 +467,7 @@ public class ServicesViewModelTests
             DisplayName = "Remote Procedure Call (RPC)",
             Status = "Running",
             StartType = "Automatic",
-            SafetyLevel = Models.SafetyLevel.Critical,
+            SafetyLevel = SafetyLevel.Critical,
             SafetyDescription = "Core Windows IPC. System will not function without it."
         };
         var vm = await CreateWithDataAsync(new List<ServiceEntry> { critical });
@@ -496,7 +497,7 @@ public class ServicesViewModelTests
     private static async Task<ServicesViewModel> CreateWithLedgerAsync(
         List<ServiceEntry> services, ServiceStartupLedgerService ledger, IPowerShellRunner? ps = null)
     {
-        var vm = new ServicesViewModel(ps ?? new Services.PowerShellRunner(), ledger);
+        var vm = new ServicesViewModel(ps ?? new PowerShellRunner(), ledger);
         await vm.InitializationComplete;
 
         typeof(ServicesViewModel)
@@ -750,7 +751,7 @@ public class ServicesViewModelTests
             new()
             {
                 Name = FakeServiceName, DisplayName = "Delayed Test", Status = "Running",
-                StartType = "Automatic", IsDelayedAutoStart = true, SafetyLevel = Models.SafetyLevel.Safe,
+                StartType = "Automatic", IsDelayedAutoStart = true, SafetyLevel = SafetyLevel.Safe,
             },
         };
         var runner = RunnerReturning(0);
@@ -786,7 +787,7 @@ public class ServicesViewModelTests
             new()
             {
                 Name = FakeServiceName, DisplayName = "Plain Test", Status = "Running",
-                StartType = "Automatic", IsDelayedAutoStart = false, SafetyLevel = Models.SafetyLevel.Safe,
+                StartType = "Automatic", IsDelayedAutoStart = false, SafetyLevel = SafetyLevel.Safe,
             },
         };
         var runner = RunnerReturning(0);
@@ -819,7 +820,7 @@ public class ServicesViewModelTests
         new()
         {
             Name = FakeServiceName, DisplayName = "Ledger Test", Status = "Running",
-            StartType = "Automatic", IsDelayedAutoStart = false, SafetyLevel = Models.SafetyLevel.Safe,
+            StartType = "Automatic", IsDelayedAutoStart = false, SafetyLevel = SafetyLevel.Safe,
         },
     ];
 
@@ -919,7 +920,7 @@ public class ServicesViewModelTests
             new()
             {
                 Name = FakeServiceName, DisplayName = "Running Test", Status = "Running",
-                StartType = "Automatic", SafetyLevel = Models.SafetyLevel.Caution,
+                StartType = "Automatic", SafetyLevel = SafetyLevel.Caution,
             },
         };
         var runner = RunnerReturning(0);
@@ -946,7 +947,7 @@ public class ServicesViewModelTests
             new()
             {
                 Name = FakeServiceName, DisplayName = "Critical Test", Status = "Running",
-                StartType = "Automatic", SafetyLevel = Models.SafetyLevel.Critical,
+                StartType = "Automatic", SafetyLevel = SafetyLevel.Critical,
             },
         };
         var runner = RunnerReturning(0);
@@ -972,7 +973,7 @@ public class ServicesViewModelTests
             new()
             {
                 Name = FakeServiceName, DisplayName = "Disabled Test", Status = "Stopped",
-                StartType = "Disabled", SafetyLevel = Models.SafetyLevel.Safe,
+                StartType = "Disabled", SafetyLevel = SafetyLevel.Safe,
             },
         };
         var runner = RunnerReturning(0);
@@ -1011,7 +1012,7 @@ public class ServicesViewModelTests
             new()
             {
                 Name = "SysManagerTest(R) Updater", DisplayName = "Vendor Updater", Status = "Stopped",
-                StartType = startType, SafetyLevel = Models.SafetyLevel.Safe,
+                StartType = startType, SafetyLevel = SafetyLevel.Safe,
             },
         };
         var runner = RunnerReturning(0);
@@ -1040,7 +1041,7 @@ public class ServicesViewModelTests
             new()
             {
                 Name = "RpcSs", DisplayName = "Remote Procedure Call (RPC)", Status = "Running",
-                StartType = "Automatic", SafetyLevel = Models.SafetyLevel.Safe,
+                StartType = "Automatic", SafetyLevel = SafetyLevel.Safe,
             },
         };
         using var vm = await CreateWithDataAsync(scanned);
@@ -1059,8 +1060,7 @@ public class ServicesViewModelTests
         // to get past the gate, but each one drives a single command. Enable was missing its confirm
         // precisely because three siblings had one and nothing checked that the fourth did — so the
         // count is asserted rather than assumed.
-        var source = File.ReadAllText(Path.Combine(
-            TestPaths.TestProject(), "..", "SysManager", "ViewModels", "ServicesViewModel.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("ViewModels", "ServicesViewModel.cs"));
 
         var confirms = source.Split("DialogService.Instance.Confirm(").Length - 1;
 
@@ -1086,7 +1086,7 @@ public class ServicesViewModelTests
         new()
         {
             Name = "Spooler", DisplayName = "Print Spooler", Status = "Running", StartType = "Automatic",
-            SafetyLevel = Models.SafetyLevel.Caution, SafetyDescription = "Required for printing.",
+            SafetyLevel = SafetyLevel.Caution, SafetyDescription = "Required for printing.",
             DependentServices = dependents
         }
     ];
@@ -1174,7 +1174,7 @@ public class ServicesViewModelTests
             new()
             {
                 Name = "RpcSs", DisplayName = "Remote Procedure Call", Status = "Running",
-                StartType = "Automatic", SafetyLevel = Models.SafetyLevel.Critical,
+                StartType = "Automatic", SafetyLevel = SafetyLevel.Critical,
                 SafetyDescription = "Core Windows IPC.", DependentServices = ["Windows Fax", "Print Spooler"]
             }
         ];
@@ -1201,9 +1201,9 @@ public class ServicesViewModelTests
 
     private static List<ServiceEntry> FreshEntries() =>
     [
-        new() { Name = "wuauserv", DisplayName = "Windows Update", Description = "Manages Windows updates", Status = "Running", StartType = "Automatic", Recommendation = "keep-enabled", SafetyLevel = Models.SafetyLevel.Caution },
-        new() { Name = "Spooler", DisplayName = "Print Spooler", Description = "Manages print jobs", Status = "Running", StartType = "Automatic", Recommendation = "safe-to-disable", SafetyLevel = Models.SafetyLevel.Caution },
-        new() { Name = "XboxGipSvc", DisplayName = "Xbox Accessory Management", Description = "Manages Xbox accessories", Status = "Stopped", StartType = "Manual", Recommendation = "safe-to-disable", SafetyLevel = Models.SafetyLevel.Safe },
+        new() { Name = "wuauserv", DisplayName = "Windows Update", Description = "Manages Windows updates", Status = "Running", StartType = "Automatic", Recommendation = "keep-enabled", SafetyLevel = SafetyLevel.Caution },
+        new() { Name = "Spooler", DisplayName = "Print Spooler", Description = "Manages print jobs", Status = "Running", StartType = "Automatic", Recommendation = "safe-to-disable", SafetyLevel = SafetyLevel.Caution },
+        new() { Name = "XboxGipSvc", DisplayName = "Xbox Accessory Management", Description = "Manages Xbox accessories", Status = "Stopped", StartType = "Manual", Recommendation = "safe-to-disable", SafetyLevel = SafetyLevel.Safe },
     ];
 
     [Fact]
@@ -1335,7 +1335,7 @@ public class ServicesViewModelTests
         DisplayName = "Xbox Accessory Management",
         Status = "Stopped",
         StartType = verb == "Enable" ? "Disabled" : "Manual",
-        SafetyLevel = Models.SafetyLevel.Safe,
+        SafetyLevel = SafetyLevel.Safe,
     };
 
     [Theory]
@@ -1393,7 +1393,7 @@ public class ServicesViewModelTests
             DisplayName = "Lock Test",
             Status = "Stopped",
             StartType = verb == "Enable" ? "Disabled" : "Manual",
-            SafetyLevel = Models.SafetyLevel.Safe,
+            SafetyLevel = SafetyLevel.Safe,
         };
         var runner = RunnerReturning(0);
         using var vm = await CreateWithLedgerAsync([entry], temp.NewLedger(), runner);

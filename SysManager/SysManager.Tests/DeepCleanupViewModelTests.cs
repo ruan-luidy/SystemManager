@@ -6,9 +6,9 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Reflection;
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.DeepCleanup;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -45,7 +45,7 @@ public class DeepCleanupViewModelTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private DeepCleanupViewModel NewVm() => new(new Services.DeepCleanupService(_roots));
+    private DeepCleanupViewModel NewVm() => new(new DeepCleanupService(_roots));
 
     // ---------- construction & defaults ----------
 

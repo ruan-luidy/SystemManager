@@ -3,7 +3,36 @@
 // License: MIT
 
 using System.Windows.Input;
-using SysManager.ViewModels;
+using SysManager.Features.About;
+using SysManager.Features.AppUpdates;
+using SysManager.Features.Cleanup;
+using SysManager.Features.CliInterface;
+using SysManager.Features.CpuAffinity;
+using SysManager.Features.DarkMode;
+using SysManager.Features.Dashboard;
+using SysManager.Features.DeepCleanup;
+using SysManager.Features.Defender;
+using SysManager.Features.DisplayProfile;
+using SysManager.Features.Drivers;
+using SysManager.Features.FileLock;
+using SysManager.Features.Logs;
+using SysManager.Features.NetworkRepair;
+using SysManager.Features.NotificationBlocker;
+using SysManager.Features.Ping;
+using SysManager.Features.ResourceHistory;
+using SysManager.Features.ScheduledMaintenance;
+using SysManager.Features.SettingsWatchdog;
+using SysManager.Features.SpeedTest;
+using SysManager.Features.StandbyMemory;
+using SysManager.Features.SystemHealth;
+using SysManager.Features.TaskScheduler;
+using SysManager.Features.TimerResolution;
+using SysManager.Features.Traceroute;
+using SysManager.Features.TweaksHub;
+using SysManager.Features.WindowsUpdate;
+using SysManager.Shared;
+using SysManager.Shared.Services;
+using SysManager.Shell;
 
 namespace SysManager.IntegrationTests;
 
@@ -620,7 +649,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-timer-resolution");
-        Assert.Equal(typeof(SysManager.Views.TimerResolutionView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.TimerResolution.TimerResolutionView), item.ViewType);
         Assert.IsType<TimerResolutionViewModel>(item.Content);
         Assert.False(item.IsInDevelopment);
     }
@@ -630,7 +659,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-file-lock");
-        Assert.Equal(typeof(SysManager.Views.FileLockView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.FileLock.FileLockView), item.ViewType);
         Assert.IsType<FileLockViewModel>(item.Content);
         Assert.False(item.IsInDevelopment);
     }
@@ -640,7 +669,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-display-profiles");
-        Assert.Equal(typeof(SysManager.Views.DisplayProfileView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.DisplayProfile.DisplayProfileView), item.ViewType);
         Assert.IsType<DisplayProfileViewModel>(item.Content);
         Assert.False(item.IsInDevelopment);
     }
@@ -650,7 +679,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-cpu-affinity");
-        Assert.Equal(typeof(SysManager.Views.CpuAffinityView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.CpuAffinity.CpuAffinityView), item.ViewType);
         Assert.IsType<CpuAffinityViewModel>(item.Content);
         Assert.False(item.IsInDevelopment);
     }
@@ -660,7 +689,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-defender-tweaks");
-        Assert.Equal(typeof(SysManager.Views.DefenderView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.Defender.DefenderView), item.ViewType);
         Assert.IsType<DefenderViewModel>(item.Content);
         Assert.False(item.IsInDevelopment);
     }
@@ -670,7 +699,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-task-scheduler");
-        Assert.Equal(typeof(SysManager.Views.TaskSchedulerView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.TaskScheduler.TaskSchedulerView), item.ViewType);
         Assert.IsType<TaskSchedulerViewModel>(item.Content);
         Assert.False(item.IsInDevelopment);
     }
@@ -680,7 +709,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-dark-mode");
-        Assert.Equal(typeof(SysManager.Views.DarkModeView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.DarkMode.DarkModeView), item.ViewType);
         Assert.IsType<DarkModeViewModel>(item.Content);
         Assert.False(item.IsInDevelopment);
     }
@@ -690,7 +719,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-standby-cleaner");
-        Assert.Equal(typeof(SysManager.Views.StandbyMemoryView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.StandbyMemory.StandbyMemoryView), item.ViewType);
         Assert.IsType<StandbyMemoryViewModel>(item.Content);
         Assert.False(item.IsInDevelopment);
     }
@@ -704,7 +733,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-resource-history");
-        Assert.Equal(typeof(SysManager.Views.ResourceHistoryView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.ResourceHistory.ResourceHistoryView), item.ViewType);
         Assert.IsType<ResourceHistoryViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
@@ -715,7 +744,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-settings-watchdog");
-        Assert.Equal(typeof(SysManager.Views.SettingsWatchdogView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.SettingsWatchdog.SettingsWatchdogView), item.ViewType);
         Assert.IsType<SettingsWatchdogViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
@@ -726,7 +755,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-cli-interface");
-        Assert.Equal(typeof(SysManager.Views.CliInterfaceView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.CliInterface.CliInterfaceView), item.ViewType);
         Assert.IsType<CliInterfaceViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
@@ -737,7 +766,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-scheduled-maintenance");
-        Assert.Equal(typeof(SysManager.Views.ScheduledMaintenanceView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.ScheduledMaintenance.ScheduledMaintenanceView), item.ViewType);
         Assert.IsType<ScheduledMaintenanceViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
@@ -748,7 +777,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-tweaks-hub");
-        Assert.Equal(typeof(SysManager.Views.TweaksHubView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.TweaksHub.TweaksHubView), item.ViewType);
         Assert.IsType<TweaksHubViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }
@@ -761,7 +790,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-notification-blocker");
-        Assert.Equal(typeof(SysManager.Views.NotificationBlockerView), item.ViewType);
+        Assert.Equal(typeof(SysManager.Features.NotificationBlocker.NotificationBlockerView), item.ViewType);
         Assert.IsType<NotificationBlockerViewModel>(item.Content);
         Assert.True(item.IsInDevelopment);
     }

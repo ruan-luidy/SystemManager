@@ -3,9 +3,11 @@
 // License: MIT
 
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.TweaksHub;
+using SysManager.Features.TweaksHub.Models;
+using SysManager.Features.TweaksHub.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

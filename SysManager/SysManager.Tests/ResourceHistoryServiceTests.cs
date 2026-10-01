@@ -8,8 +8,10 @@ using System.Linq;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Threading.Tasks;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.ResourceHistory;
+using SysManager.Features.ResourceHistory.Models;
+using SysManager.Features.ResourceHistory.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

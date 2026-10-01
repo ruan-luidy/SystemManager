@@ -3,10 +3,13 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.BandwidthMonitor;
+using SysManager.Features.BandwidthMonitor.Models;
+using SysManager.Features.BandwidthMonitor.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
+using SysManager.Shell;
 
 namespace SysManager.Tests;
 

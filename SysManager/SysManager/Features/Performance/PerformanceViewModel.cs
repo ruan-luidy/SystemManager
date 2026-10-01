@@ -1,0 +1,903 @@
+// SysManager · PerformanceViewModel — performance mode tab
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+
+using System.Globalization;
+using System.Security;
+using System.Windows;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Serilog;
+using SysManager.Shared;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
+
+namespace SysManager.Features.Performance;
+
+/// <summary>
+/// Performance Mode tab — each tweak has its own Apply button.
+/// Snapshot taken before first change; Restore All reverts everything.
+///
+/// SAFETY:
+/// • Snapshot taken before first change — Restore reverts to exact original.
+/// • Every toggle is two-door (enable ↔ disable).
+/// • Confirmation dialog before every destructive action.
+/// • GPU changes warn about reboot requirement.
+/// </summary>
+public sealed partial class PerformanceViewModel : ViewModelBase
+{
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
+    private readonly PerformanceService _service;
+    // Consulted for ONE question: is a game profile live? While it is, the current power plan and
+    // visual-effects state belong to the profile, not to the user, so they must not be recorded as
+    // the recovery baseline. See EnsureSnapshotAsync.
+    private readonly IGamingProfileService _gaming;
+    private PerformanceService.OriginalSnapshot? _snapshot;
+    // Serializes the load-modify of _snapshot so two Apply commands running at once
+    // can't both observe a null snapshot and race the capture/save.
+    private readonly SemaphoreSlim _snapshotGate = new(1, 1);
+
+    [ObservableProperty] private bool _isElevated;
+    [ObservableProperty] private PerformanceProfile _profile = new();
+    [ObservableProperty] private string _summary = "Click Refresh to read current performance settings.";
+
+    // ── Desired state (set by UI, applied per-section) ──
+    [ObservableProperty] private string _selectedPlan = "balanced";
+    [ObservableProperty] private bool _wantVisualEffectsReduced;
+    [ObservableProperty] private bool _wantGameModeOff;
+    [ObservableProperty] private bool _wantXboxGameBarOff;
+    [ObservableProperty] private bool _wantGpuMaxPerformance;
+    [ObservableProperty] private bool _wantProcessorMaxState;
+
+    // ── UI state ──
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsProcessorStateEditable))]
+    private bool _isProcessorStateLocked;
+
+    /// <summary>Inverse of <see cref="IsProcessorStateLocked"/> for XAML IsEnabled bindings.</summary>
+    public bool IsProcessorStateEditable => !IsProcessorStateLocked;
+
+    [ObservableProperty] private bool _hasNvidiaGpu;
+    [ObservableProperty] private string _nvidiaGpuName = "";
+    [ObservableProperty] private bool _needsReboot;
+    [ObservableProperty] private bool _hasSnapshot;
+
+    public PerformanceViewModel(PerformanceService service, IGamingProfileService gaming)
+    {
+        _service = service;
+        _gaming = gaming;
+        IsElevated = AdminHelper.IsElevated();
+        InitializeAsync(InitAsync);
+    }
+
+    private async Task InitAsync()
+    {
+        // Fire-and-forget from the constructor: a tab opened and closed quickly can dispose the gate
+        // before this runs. Nothing to initialise into at that point.
+        if (IsDisposed) return;
+
+        try
+        {
+            await _snapshotGate.WaitAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
+        try
+        {
+            // Recovery must not wait behind live powercfg probes. A blocked or unavailable
+            // system tool must never keep a valid persisted Restore All action disabled.
+            _snapshot ??= await Task.Run(_service.LoadSnapshot);
+            HasSnapshot = _snapshot is not null;
+        }
+        finally { ReleaseSnapshotGate(); }
+
+        try { await RefreshAsync(); }
+        catch (InvalidOperationException ex) { Log.Warning("Performance auto-refresh failed: {Error}", ex.Message); }
+        catch (System.Security.SecurityException ex) { Log.Warning("Performance auto-refresh failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Warning("Performance auto-refresh failed: {Error}", ex.Message); }
+    }
+
+    /// <summary>Ensure snapshot exists before any change.</summary>
+    private async Task EnsureSnapshotAsync()
+    {
+        // Every Apply command awaits this before touching the system, so a tab closed mid-command
+        // resumes here with a disposed gate. Returning quietly would let the caller carry on and mutate
+        // the system with no snapshot to revert it — strictly worse than failing. So this reports the
+        // same refusal the "snapshot could not be saved" path already uses, and every caller already
+        // catches InvalidOperationException and abandons the change.
+        if (IsDisposed) throw SnapshotUnavailable();
+
+        try
+        {
+            await _snapshotGate.WaitAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            throw SnapshotUnavailable();
+        }
+
+        try
+        {
+            if (_snapshot is null)
+            {
+                var (persisted, problem) = await Task.Run(() =>
+                {
+                    var loaded = _service.LoadSnapshot(out var why);
+                    return (loaded, why);
+                });
+                if (persisted is not null)
+                {
+                    _snapshot = persisted;
+                }
+                else
+                {
+                    // A snapshot that is there but cannot be used is not "none". The settings on the machine may be
+                    // the tweaks of an earlier Apply, and capturing them now would record the tweaks as the original,
+                    // so Restore All would put them back (#2521).
+                    if (problem == PerformanceService.SnapshotProblem.Unreadable) throw SnapshotUnreadable();
+                    if (problem == PerformanceService.SnapshotProblem.Invalid)
+                        throw SnapshotDamaged(setAside: await Task.Run(_service.SetSnapshotAside));
+
+                    // Refuse to CAPTURE while a game profile is live. The lock that keeps this tab and
+                    // Gaming Profile from overlapping is held per operation, but a gaming SESSION
+                    // outlives it: the profile applies, releases the lock, and its power plan and
+                    // visual-effects values stay live until the game exits. A snapshot taken in that
+                    // window records the profile's state as the user's own and persists it, so a later
+                    // Restore All would put the machine on a gaming plan it was never on. Loading an
+                    // ALREADY-persisted snapshot above is fine — it predates the session.
+                    if (_gaming.IsActive) throw SnapshotDuringGamingSession();
+
+                    var captured = await _service.TakeSnapshotAsync();
+                    var saved = await Task.Run(() => _service.SaveSnapshot(captured));
+                    if (!saved) throw SnapshotUnavailable();
+                    _snapshot = captured;
+                }
+            }
+            HasSnapshot = true;
+        }
+        finally { ReleaseSnapshotGate(); }
+    }
+
+    /// <summary>
+    /// The single refusal for "no recovery snapshot, so nothing was changed". Every Apply command
+    /// catches <see cref="InvalidOperationException"/> and abandons the change, which is what makes
+    /// this safe to throw from anywhere in the snapshot path.
+    /// </summary>
+    private static InvalidOperationException SnapshotUnavailable() =>
+        new("The recovery snapshot could not be saved, so no setting was changed.");
+
+    /// <summary>The refusal for "the recovery snapshot is there, and could not be read just now".</summary>
+    private static InvalidOperationException SnapshotUnreadable() =>
+        new("SysManager could not read its record of your original settings, so no setting was changed. Try again in a moment.");
+
+    /// <summary>
+    /// The refusal for "the recovery snapshot is there and cannot be restored". Once it is set aside, the next Apply
+    /// finds no snapshot and records the current settings as the new original, so the user has been told first.
+    /// </summary>
+    private static InvalidOperationException SnapshotDamaged(bool setAside) => setAside
+        ? new("SysManager's record of your original settings is damaged and cannot be restored, so no setting was "
+              + "changed. SysManager set the damaged record aside. Apply again to record the current settings as the "
+              + "new original.")
+        : new("SysManager's record of your original settings is damaged and could not be set aside, so no setting "
+              + "was changed. Try again in a moment.");
+
+    /// <summary>
+    /// The refusal for "a game profile is running, so the settings on this machine right now are the
+    /// profile's, not yours". Thrown only when there is no persisted snapshot to fall back on, i.e.
+    /// exactly when this tab would otherwise invent a baseline out of borrowed values. Every Apply
+    /// command catches <see cref="InvalidOperationException"/> and shows the message, so the user is
+    /// told what to do rather than just refused.
+    /// </summary>
+    private static InvalidOperationException SnapshotDuringGamingSession() =>
+        new("Stop the game profile first. While it is running, the power plan and visual effects are "
+            + "the profile's, so recording them as your original settings would restore you to them later.");
+
+    /// <summary>
+    /// Releases the snapshot gate unless disposal has already claimed it. Releasing a disposed
+    /// <see cref="SemaphoreSlim"/> throws, and this runs from a <c>finally</c>, where an exception
+    /// would replace a clean teardown — or a real error — with an unhandled one.
+    /// </summary>
+    private void ReleaseSnapshotGate()
+    {
+        if (IsDisposed) return;
+        try { _snapshotGate.Release(); }
+        catch (ObjectDisposedException) { /* disposed mid-operation; nothing left to release */ }
+    }
+
+    private void UpdateSummary()
+    {
+        Summary = $"Active plan: {Profile.ProfileSummary} · "
+                + $"Visual FX: {(Profile.VisualEffectsReduced ? "Reduced" : "Normal")} · "
+                + $"Game Mode: {(Profile.GameModeEnabled ? "ON" : "OFF")} · "
+                + $"Xbox Bar: {(Profile.XboxGameBarDisabled ? "OFF" : "ON")}";
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  REFRESH
+    // ═══════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Reading performance settings…";
+        NeedsReboot = false;
+
+        try
+        {
+            Profile = await _service.ReadProfileAsync();
+            SyncTogglesFromProfile();
+            IsHibernationEnabled = PerformanceService.ReadHibernationEnabled();
+            UpdateSummary();
+            StatusMessage = "Settings loaded.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            StatusMessage = $"Read settings failed: {ex.Message}";
+            Summary = "Could not read performance settings.";
+        }
+        catch (SecurityException ex)
+        {
+            StatusMessage = $"Read settings failed: {ex.Message}";
+            Summary = "Could not read performance settings.";
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            StatusMessage = $"Read settings failed: {ex.Message}";
+            Summary = "Could not read performance settings.";
+        }
+        finally
+        {
+            IsBusy = false;
+            IsProgressIndeterminate = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  POWER PLAN — separate Apply
+    // ═══════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private async Task ApplyPowerPlanAsync()
+    {
+        if (SelectedPlan == GetCurrentPlanKey())
+        {
+            StatusMessage = "Power plan is already set to the selected option.";
+            return;
+        }
+
+        var planName = SelectedPlan switch
+        {
+            "ultimate" => "Ultimate Performance",
+            "high" => "High Performance",
+            _ => "Balanced"
+        };
+
+        if (!DialogService.Instance.Confirm(
+            $"Switch power plan to {planName}?",
+            "Power Plan — Confirm")) return;
+
+        // Serialize every system-mutating command through the app-wide lock (like the SFC/DISM
+        // and Environment-variable operations). Without it, Apply* and Restore All can race:
+        // e.g. Restore All can delete the snapshot + null _snapshot while an Apply's registry
+        // write is still in flight, leaving a tweak applied with no snapshot to revert it.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply power plan");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            await EnsureSnapshotAsync();
+            StatusMessage = $"Switching to {planName}…";
+
+            switch (SelectedPlan)
+            {
+                case "ultimate":
+                    var guid = await _service.EnsureUltimatePerformancePlanAsync();
+                    // No plan came back, so there is nothing to switch to. This used to skip the switch and fall
+                    // through to "Power plan set to Ultimate Performance." (#2438). The Gaming Profile's use of the
+                    // same method has always counted an empty GUID as a failure.
+                    if (string.IsNullOrEmpty(guid))
+                    {
+                        StatusMessage = "Power plan change failed: Windows did not provide the Ultimate Performance plan on this PC.";
+                        return;
+                    }
+                    await _service.SetActivePlanAsync(guid);
+                    break;
+                case "high":
+                    await _service.SetActivePlanAsync(PerformanceService.HighPerfGuid);
+                    break;
+                default:
+                    await _service.SetActivePlanAsync(PerformanceService.BalancedGuid);
+                    break;
+            }
+
+            await RefreshAsync();
+            StatusMessage = $"Power plan set to {planName}.";
+            Log.Information("Power plan changed to {PlanName}", planName);
+        }
+        catch (InvalidOperationException ex) { StatusMessage = $"Power plan change failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Power plan change failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Power plan change failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  VISUAL EFFECTS — separate Apply
+    // ═══════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private async Task ApplyVisualEffectsAsync()
+    {
+        if (WantVisualEffectsReduced == Profile.VisualEffectsReduced)
+        {
+            StatusMessage = "Visual effects are already in the selected state.";
+            return;
+        }
+
+        var action = WantVisualEffectsReduced ? "Reduce" : "Restore";
+        if (!DialogService.Instance.Confirm(
+            $"{action} visual effects (animations, fades, shadows)?",
+            "Visual Effects — Confirm")) { SyncTogglesFromProfile(); return; }
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply visual effects");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            SyncTogglesFromProfile();
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            await EnsureSnapshotAsync();
+            // Registry write + SystemParametersInfo broadcast off the UI thread so the window
+            // stays responsive, busy-gated like ApplyPowerPlanAsync.
+            await Task.Run(() => PerformanceService.SetUiEffects(!WantVisualEffectsReduced)).ConfigureAwait(true);
+            await RefreshAsync();
+            StatusMessage = $"Visual effects {(WantVisualEffectsReduced ? "reduced" : "restored")}.";
+            Log.Information("Visual effects {Action}", WantVisualEffectsReduced ? "reduced" : "restored");
+        }
+        catch (InvalidOperationException ex) { StatusMessage = $"Visual effects change failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Visual effects change failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Visual effects change failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  GAME MODE — separate Apply
+    // ═══════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private async Task ApplyGameModeAsync()
+    {
+        var enabling = !WantGameModeOff;
+        if (enabling == Profile.GameModeEnabled)
+        {
+            StatusMessage = "Game Mode is already in the selected state.";
+            return;
+        }
+
+        var action = enabling ? "Enable" : "Disable";
+        if (!DialogService.Instance.Confirm(
+            $"{action} Game Mode?",
+            "Game Mode — Confirm")) { SyncTogglesFromProfile(); return; }
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply Game Mode");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            SyncTogglesFromProfile();
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            await EnsureSnapshotAsync();
+            await Task.Run(() => PerformanceService.SetGameMode(enabling)).ConfigureAwait(true);
+            await RefreshAsync();
+            StatusMessage = $"Game Mode {(enabling ? "enabled" : "disabled")}.";
+            Log.Information("Game Mode {Action}", enabling ? "enabled" : "disabled");
+        }
+        catch (InvalidOperationException ex) { StatusMessage = $"Game Mode change failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Game Mode change failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Game Mode change failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  XBOX GAME BAR — separate Apply
+    // ═══════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private async Task ApplyXboxGameBarAsync()
+    {
+        var disabling = WantXboxGameBarOff;
+        if (disabling == Profile.XboxGameBarDisabled)
+        {
+            StatusMessage = "Xbox Game Bar is already in the selected state.";
+            return;
+        }
+
+        var action = disabling ? "Disable" : "Enable";
+        if (!DialogService.Instance.Confirm(
+            $"{action} Xbox Game Bar and Game DVR overlay?",
+            "Xbox Game Bar — Confirm")) { SyncTogglesFromProfile(); return; }
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply Xbox Game Bar");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            SyncTogglesFromProfile();
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            await EnsureSnapshotAsync();
+            await Task.Run(() => PerformanceService.SetXboxGameBar(!disabling)).ConfigureAwait(true);
+            await RefreshAsync();
+            StatusMessage = $"Xbox Game Bar {(disabling ? "disabled" : "enabled")}.";
+            Log.Information("Xbox Game Bar {Action}", disabling ? "disabled" : "enabled");
+        }
+        catch (InvalidOperationException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
+        catch (System.IO.IOException ex) { StatusMessage = $"Xbox Game Bar change failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  GPU — separate Apply
+    // ═══════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private async Task ApplyGpuAsync()
+    {
+        if (!HasNvidiaGpu)
+        {
+            StatusMessage = "No NVIDIA GPU detected.";
+            return;
+        }
+        if (WantGpuMaxPerformance == Profile.GpuMaxPerformance)
+        {
+            StatusMessage = "GPU is already in the selected state.";
+            return;
+        }
+
+        var action = WantGpuMaxPerformance ? "Enable" : "Disable";
+        if (!DialogService.Instance.Confirm(
+            $"{action} NVIDIA GPU max performance (DisableDynamicPstate)?\n\n"
+            + "⚠ This change requires a REBOOT to take effect.",
+            "GPU Performance — Confirm")) { SyncTogglesFromProfile(); return; }
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply GPU performance");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            SyncTogglesFromProfile();
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            await EnsureSnapshotAsync();
+            // FindNvidiaSubKey + the registry write run off the UI thread; the UI updates below
+            // resume on it (ConfigureAwait true), busy-gated like ApplyPowerPlanAsync.
+            var (found, ok) = await Task.Run(() =>
+            {
+                var nvidiaKey = PerformanceService.FindNvidiaSubKey();
+                return nvidiaKey is null
+                    ? (Found: false, Ok: false)
+                    : (Found: true, Ok: PerformanceService.SetGpuMaxPerformance(nvidiaKey, WantGpuMaxPerformance));
+            }).ConfigureAwait(true);
+            if (found)
+            {
+                if (ok)
+                {
+                    NeedsReboot = true;
+                    StatusMessage = $"GPU max performance {(WantGpuMaxPerformance ? "enabled" : "disabled")}. Reboot required.";
+                    Log.Information("GPU max performance {Action}. Reboot required", WantGpuMaxPerformance ? "enabled" : "disabled");
+                }
+                else
+                    StatusMessage = "Failed to write GPU registry key (admin required).";
+            }
+            await RefreshAsync();
+        }
+        catch (InvalidOperationException ex) { StatusMessage = $"GPU setting change failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"GPU setting change failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"GPU setting change failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  PROCESSOR STATE — separate Apply
+    // ═══════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private async Task ApplyProcessorStateAsync()
+    {
+        if (IsProcessorStateLocked)
+        {
+            StatusMessage = "Processor state is locked to 100 % by the current power plan. Switch to Balanced to adjust it.";
+            return;
+        }
+
+        if (WantProcessorMaxState == Profile.ProcessorMaxState)
+        {
+            StatusMessage = "Processor state is already in the selected state.";
+            return;
+        }
+
+        var action = WantProcessorMaxState ? "Set to 100%" : "Restore default";
+        if (!DialogService.Instance.Confirm(
+            $"{action} processor minimum state?",
+            "Processor State — Confirm")) { SyncTogglesFromProfile(); return; }
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply processor state");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            SyncTogglesFromProfile();
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            await EnsureSnapshotAsync();
+            // "Restore default" targets the captured original; if it couldn't be read
+            // (null), fall back to the Windows default of 5% for this explicit user action.
+            var target = WantProcessorMaxState ? 100 : (_snapshot!.ProcessorMinPercentAc ?? 5);
+            await _service.SetProcessorMinStateAsync(target);
+            await RefreshAsync();
+            StatusMessage = $"Processor min state set to {target}%.";
+            Log.Information("Processor min state set to {Percent}%", target);
+        }
+        catch (InvalidOperationException ex) { StatusMessage = $"Processor state change failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Processor state change failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Processor state change failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  RESTORE POINT — create a system restore point
+    // ═══════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private async Task CreateRestorePointAsync()
+    {
+        if (!AdminHelper.IsElevated())
+        {
+            StatusMessage = "⚠ Creating a restore point requires administrator privileges.";
+            return;
+        }
+
+        // Same disclosure as the Restore Points tab: creating a checkpoint enables System Protection for
+        // the Windows drive first, because Checkpoint-Computer fails when it is off. Both entry points
+        // reach the same service call, so both have to say so — a prompt that is honest in one tab and
+        // silent in the other still leaves the user surprised.
+        if (!DialogService.Instance.Confirm(
+                "Create a System Restore point?\n\n" +
+                "This saves the current system state so you can roll back later if something goes wrong.\n\n" +
+                RestorePointService.ProtectionNotice,
+                "Restore Point — Confirm"))
+        {
+            return;
+        }
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Create restore point");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Creating restore point…";
+        try
+        {
+            var ok = await _service.CreateRestorePointAsync(
+                $"SysManager — {DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}");
+            StatusMessage = ok
+                ? "✓ Restore point created successfully."
+                : "✗ Failed to create restore point. Check Event Viewer for details.";
+            if (ok) Log.Information("System restore point created");
+            else Log.Warning("System restore point creation failed");
+        }
+        catch (InvalidOperationException ex) { StatusMessage = $"Restore point creation failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Restore point creation failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Restore point creation failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  RAM WORKING SET TRIM
+    // ═══════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private async Task TrimRamAsync()
+    {
+        if (!DialogService.Instance.Confirm(
+            "Trim the working set of all processes?\n\n"
+            + "This frees physical RAM by moving pages to the standby list. "
+            + "No data is lost — pages are soft-faulted back on demand. "
+            + "Apps may feel briefly slower on next access.\n\n"
+            + "This is the same as \"Empty Working Set\" in RAMMap.",
+            "RAM Trim — Confirm")) return;
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Trim RAM");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
+        try
+        {
+            // TrimWorkingSets enumerates every process and calls EmptyWorkingSet
+            // (P/Invoke) on each — run it off the UI thread so the window stays
+            // responsive while hundreds of processes are trimmed.
+            var count = await Task.Run(_service.TrimWorkingSets).ConfigureAwait(true);
+            StatusMessage = $"✓ Trimmed working set of {count} processes.";
+            Log.Information("RAM trim completed: {Count} processes trimmed", count);
+        }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"RAM trim failed: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"RAM trim failed: {ex.Message}"; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  HIBERNATION TOGGLE
+    // ═══════════════════════════════════════════════════════════════
+
+    [ObservableProperty] private bool _isHibernationEnabled;
+
+    [RelayCommand]
+    private async Task ToggleHibernationAsync()
+    {
+        if (!AdminHelper.IsElevated())
+        {
+            StatusMessage = "⚠ Toggling hibernation requires administrator privileges.";
+            return;
+        }
+
+        var enabling = !IsHibernationEnabled;
+        var action = enabling ? "Enable" : "Disable";
+        var detail = enabling
+            ? "This creates hiberfil.sys and allows the PC to hibernate."
+            // Fast Startup and hybrid sleep both write to the hibernation file, so they go with it (#2505).
+            : "This deletes hiberfil.sys and frees disk space (often several GB). It also turns off Fast Startup "
+              + "and hybrid sleep, which both need that file.";
+
+        if (!DialogService.Instance.Confirm(
+            $"{action} hibernation?\n\n{detail}",
+            "Hibernation — Confirm")) return;
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Toggle hibernation");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = $"{(enabling ? "Enabling" : "Disabling")} hibernation…";
+        try
+        {
+            await _service.SetHibernationAsync(enabling);
+            IsHibernationEnabled = PerformanceService.ReadHibernationEnabled();
+            // The re-read decides what is reported, not the request: a success from powercfg that left
+            // hiberfil.sys where it was is still a toggle that did not happen (#2438).
+            if (IsHibernationEnabled != enabling)
+            {
+                StatusMessage = $"Hibernation toggle failed: Windows reported success, but hibernation is still {(IsHibernationEnabled ? "on" : "off")}.";
+                return;
+            }
+            StatusMessage = $"✓ Hibernation {(enabling ? "enabled" : "disabled")}.";
+            Log.Information("Hibernation {Action}", enabling ? "enabled" : "disabled");
+        }
+        catch (InvalidOperationException ex) { StatusMessage = $"Hibernation toggle failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Hibernation toggle failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Hibernation toggle failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  RESTORE ALL — revert everything to snapshot
+    // ═══════════════════════════════════════════════════════════════
+
+    [RelayCommand]
+    private async Task RestoreAllAsync()
+    {
+        if (_snapshot is null)
+        {
+            StatusMessage = "Nothing to restore — no changes have been applied yet.";
+            return;
+        }
+
+        var gpuWillBeRestored = _snapshot.NvidiaSubKey is not null;
+        var capturedAt = _snapshot.CapturedAtUtc is DateTimeOffset timestamp
+            ? timestamp.ToLocalTime().ToString("f")
+            : "Unknown (snapshot created by an earlier SysManager version)";
+        var powerPlan = string.IsNullOrEmpty(_snapshot.PowerPlanGuid)
+            ? _snapshot.PowerPlanName
+            : $"{_snapshot.PowerPlanName} ({_snapshot.PowerPlanGuid})";
+        var gpuRestoreState = _snapshot.GpuDynamicPstate
+            ? "Dynamic P-state"
+            : "Max performance";
+
+        if (!DialogService.Instance.Confirm(
+            "Restore ALL settings to the state before any changes were made?\n\n"
+            + $"Snapshot captured: {capturedAt}\n\n"
+            + $"• Power plan → {powerPlan}\n"
+            + $"• Visual effects → {(_snapshot.UiEffectsEnabled ? "Normal" : "Reduced")}\n"
+            + $"• Game Mode → {(_snapshot.GameModeEnabled ? "ON" : "OFF")}\n"
+            + $"• Xbox Game Bar → {(_snapshot.XboxGameBarEnabled ? "ON" : "OFF")}\n"
+            + $"• Game DVR → {(_snapshot.XboxGameDvrEnabled ? "ON" : "OFF")}\n"
+            + $"• Processor min state → {(_snapshot.ProcessorMinPercentAc is int p ? $"{p}%" : "unchanged")}\n"
+            + (gpuWillBeRestored ? $"• GPU → {gpuRestoreState} (reboot needed)\n" : "")
+            + "\nContinue?",
+            "Restore Original Settings — Confirm")) return;
+
+        // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync). This is
+        // the finding's core: without it, Restore All can run concurrently with an Apply command
+        // and revert to / persist a half-mutated snapshot.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Restore all performance settings");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Restoring original settings…";
+
+        try
+        {
+            await _service.RestoreFromSnapshotAsync(_snapshot);
+            // Delete the persisted snapshot too — otherwise the next Apply reloads the
+            // now-reverted pre-restore baseline via LoadSnapshot and a later Restore All
+            // would re-apply stale values.
+            var snapshotDeleted = await Task.Run(_service.DeleteSnapshot);
+            if (snapshotDeleted)
+            {
+                _snapshot = null;
+                HasSnapshot = false;
+            }
+
+            await RefreshAsync();
+            NeedsReboot = gpuWillBeRestored;
+            StatusMessage = snapshotDeleted
+                ? NeedsReboot
+                    ? "Original settings restored. Reboot required for GPU changes."
+                    : "Original settings restored."
+                : "Original settings were restored, but the recovery snapshot could not be cleared. "
+                    + "Restore All remains available so the cleanup can be retried.";
+            Log.Information(
+                "Performance settings restored to original snapshot; snapshot deleted: {Deleted}",
+                snapshotDeleted);
+        }
+        catch (InvalidOperationException ex) { StatusMessage = $"Restore all settings failed: {ex.Message}"; }
+        catch (SecurityException ex) { StatusMessage = $"Restore all settings failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Restore all settings failed: {ex.Message}"; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  HELPERS
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Which of the three plan options is shown as selected. GUID first: the plan's display name is
+    /// user-editable and localized, so a custom plan named "Ultimate Battery Saver" (a copy of
+    /// Balanced) selected Ultimate, and the real Ultimate plan on non-English Windows fell through to
+    /// Balanced. The name check now only catches a duplicated Ultimate scheme — which keeps the name
+    /// but gets a fresh GUID — and only once every stock GUID has been ruled out.
+    /// </summary>
+    private string GetCurrentPlanKey()
+    {
+        if (MatchesPlan(PowerPlans.UltimatePerformance)) return "ultimate";
+        if (MatchesPlan(PowerPlans.HighPerformance)) return "high";
+        if (MatchesPlan(PowerPlans.Balanced)) return "balanced";
+        return Profile.ActivePlanName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase)
+            ? "ultimate"
+            : "balanced";
+    }
+
+    private bool MatchesPlan(string planGuid) =>
+        Profile.ActivePlanGuid.Contains(planGuid, StringComparison.OrdinalIgnoreCase);
+
+    private void SyncTogglesFromProfile()
+    {
+        SelectedPlan = GetCurrentPlanKey();
+        WantVisualEffectsReduced = Profile.VisualEffectsReduced;
+        WantGameModeOff = !Profile.GameModeEnabled;
+        WantXboxGameBarOff = Profile.XboxGameBarDisabled;
+        WantGpuMaxPerformance = Profile.GpuMaxPerformance;
+        WantProcessorMaxState = Profile.ProcessorMaxState;
+        HasNvidiaGpu = Profile.HasNvidiaGpu;
+        NvidiaGpuName = Profile.NvidiaGpuName;
+
+        // High Performance and Ultimate Performance plans force processor
+        // min state to 100 %. The user cannot override this independently.
+        var planKey = GetCurrentPlanKey();
+        IsProcessorStateLocked = planKey is "high" or "ultimate";
+    }
+
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            App.RequestShutdown();
+    }
+
+    // CQ-M4: Override Dispose to clean up the PerformanceService's PowerShellRunner
+    // event subscriptions and prevent the fire-and-forget InitAsync from running
+    // against a disposed ViewModel if navigation happens quickly.
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            // Clear the snapshot INSIDE the gate. Clearing it outside meant a tab closed mid-Apply
+            // could null the recovery snapshot while EnsureSnapshotAsync was still capturing or saving
+            // it — the exact "a tweak applied with no snapshot left to revert it" outcome the gate
+            // exists to prevent.
+            //
+            // Wait(0), never a timeout. This runs on the UI thread (MainWindow.OnClosed and
+            // OnApplicationExit, and the container disposal in OnExit), and every gate-held await in
+            // EnsureSnapshotAsync captures the UI SynchronizationContext, so its
+            // finally { ReleaseSnapshotGate(); } can only run as a dispatcher continuation. Blocking the
+            // dispatcher does not "wait for the holder to finish" — it guarantees the holder can never
+            // finish, so a timeout is always burned in full and always returns false. Closing the window
+            // during an Apply froze it for two seconds and then skipped this clear anyway, in exactly the
+            // case the clear was written for. Wait(0) reaches the same outcome without the freeze, and
+            // still clears whenever the gate is free, which is almost always.
+            //
+            // This is why the earlier version's appeal to GamingProfileService.Dispose did not hold:
+            // that service acquires its gate with ConfigureAwait(false) at every site, so its release
+            // continuation runs off the UI thread and its bounded wait really does acquire. Adding the
+            // same discipline here would move HasSnapshot and the _snapshot assignment off the UI
+            // thread, which is a thread-affinity change and not something to make inside a bug fix.
+            if (_snapshotGate.Wait(0))
+            {
+                try { _snapshot = null; }
+                finally { _snapshotGate.Release(); }
+            }
+
+            _snapshotGate.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+}

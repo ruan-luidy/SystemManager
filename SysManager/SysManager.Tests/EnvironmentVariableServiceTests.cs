@@ -7,8 +7,9 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.Win32;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.EnvironmentVariables;
+using SysManager.Features.EnvironmentVariables.Models;
+using SysManager.Features.EnvironmentVariables.Services;
 
 namespace SysManager.Tests;
 

@@ -2,7 +2,12 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Services;
+using SysManager.Features.Startup;
+using SysManager.Features.Startup.Models;
+using SysManager.Features.Uninstaller;
+using SysManager.Features.Uninstaller.Models;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 using Xunit;
 
 namespace SysManager.Tests;
@@ -139,21 +144,21 @@ public class IconExtractorServiceTests
     [Fact]
     public void ProcessEntry_Icon_DefaultNull()
     {
-        var entry = new Models.ProcessEntry();
+        var entry = new ProcessEntry();
         Assert.Null(entry.Icon);
     }
 
     [Fact]
     public void StartupEntry_Icon_DefaultNull()
     {
-        var entry = new Models.StartupEntry();
+        var entry = new StartupEntry();
         Assert.Null(entry.Icon);
     }
 
     [Fact]
     public void InstalledApp_Icon_DefaultNull()
     {
-        var app = new Models.InstalledApp();
+        var app = new InstalledApp();
         Assert.Null(app.Icon);
     }
 

@@ -5,9 +5,10 @@
 using System.Collections.ObjectModel;
 using System.Management.Automation;
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.TaskScheduler;
+using SysManager.Features.TaskScheduler.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 using Xunit;
 
 namespace SysManager.Tests;

@@ -3,9 +3,10 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.Dashboard;
+using SysManager.Features.Dashboard.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 

@@ -2,8 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Models;
-using SysManager.ViewModels;
+using SysManager.Features.AppAlerts;
+using SysManager.Features.AppAlerts.Models;
+using SysManager.Features.AppAlerts.Services;
 using Xunit;
 
 namespace SysManager.Tests;
@@ -17,7 +18,7 @@ public class AppAlertsViewModelTests
     [Fact]
     public void InitialState_IsCorrect()
     {
-        var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        var vm = new AppAlertsViewModel(new AppAlertService());
         Assert.False(vm.IsMonitoring);
         Assert.Equal(0, vm.AlertCount);
         Assert.Equal(0, vm.UnacknowledgedCount);
@@ -27,7 +28,7 @@ public class AppAlertsViewModelTests
     [Fact]
     public void AcknowledgeAll_SetsAllAcknowledged()
     {
-        var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        var vm = new AppAlertsViewModel(new AppAlertService());
         vm.Alerts.Add(new AppInstallEntry { Name = "App1", IsAcknowledged = false });
         vm.Alerts.Add(new AppInstallEntry { Name = "App2", IsAcknowledged = false });
 
@@ -40,7 +41,7 @@ public class AppAlertsViewModelTests
     [Fact]
     public void ClearHistory_WhenConfirmed_RemovesAllAlerts()
     {
-        var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        var vm = new AppAlertsViewModel(new AppAlertService());
         vm.Alerts.Add(new AppInstallEntry { Name = "App1" });
         vm.Alerts.Add(new AppInstallEntry { Name = "App2" });
         vm.AlertCount = vm.Alerts.Count;   // the guard reads AlertCount, so it must be real here
@@ -57,7 +58,7 @@ public class AppAlertsViewModelTests
     {
         // The alert list is never persisted, so this collection is the only record of what
         // installed itself. Answering "No" must leave it completely untouched.
-        var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        var vm = new AppAlertsViewModel(new AppAlertService());
         vm.Alerts.Add(new AppInstallEntry { Name = "App1" });
         vm.Alerts.Add(new AppInstallEntry { Name = "App2" });
         vm.AlertCount = vm.Alerts.Count;
@@ -76,7 +77,7 @@ public class AppAlertsViewModelTests
     {
         // An empty list has nothing to confirm; prompting there would be pure noise. Answer
         // "No" and assert the clear still ran — proving no dialog gated it.
-        var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        var vm = new AppAlertsViewModel(new AppAlertService());
 
         using var answer = new DialogAnswer(false);
         vm.ClearHistoryCommand.Execute(null);
@@ -88,7 +89,7 @@ public class AppAlertsViewModelTests
     [Fact]
     public async Task RefreshInstalledApps_WhenNotMonitoring_LeavesBusyOff()
     {
-        using var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        using var vm = new AppAlertsViewModel(new AppAlertService());
 
         await vm.RefreshInstalledAppsCommand.ExecuteAsync(null);
 
@@ -101,7 +102,7 @@ public class AppAlertsViewModelTests
     {
         // Regression (idx 235): a manual refresh must not switch off the busy/monitoring
         // affordance while monitoring is active — IsBusy has to track IsMonitoring.
-        using var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        using var vm = new AppAlertsViewModel(new AppAlertService());
         // StartMonitoring is now async (the baseline scan is offloaded off the UI thread);
         // await it so IsMonitoring/IsBusy are set before asserting.
         await vm.StartMonitoringCommand.ExecuteAsync(null);
@@ -122,7 +123,7 @@ public class AppAlertsViewModelTests
         // UI thread, freezing the window. It is now an async command that offloads the scan.
         // The generated command must expose IAsyncRelayCommand and, once awaited, leave the
         // VM monitoring.
-        using var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        using var vm = new AppAlertsViewModel(new AppAlertService());
         Assert.IsAssignableFrom<CommunityToolkit.Mvvm.Input.IAsyncRelayCommand>(vm.StartMonitoringCommand);
 
         await vm.StartMonitoringCommand.ExecuteAsync(null);

@@ -3,8 +3,12 @@
 // License: MIT
 
 using System.Globalization;
-using SysManager.Models;
-using SysManager.ViewModels;
+using SysManager.Features.BandwidthMonitor;
+using SysManager.Features.PrivacyMonitor;
+using SysManager.Features.PrivacyMonitor.Models;
+using SysManager.Features.WindowsUpdate;
+using SysManager.Features.WindowsUpdate.Models;
+using SysManager.Shared.Models;
 
 namespace SysManager.Tests;
 

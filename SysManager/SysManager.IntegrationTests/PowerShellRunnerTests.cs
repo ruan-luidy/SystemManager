@@ -4,7 +4,8 @@
 
 using System.IO;
 using System.Reflection;
-using SysManager.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 
@@ -390,7 +391,7 @@ public class PowerShellRunnerTests
                 isElevated: () => isElevated);
             var sawCommandNotFound = false;
             runner.LineReceived += line =>
-                sawCommandNotFound |= line.Kind == Models.OutputKind.Error;
+                sawCommandNotFound |= line.Kind == OutputKind.Error;
 
             var injectedResult = await runner.RunAsync("Invoke-SysManagerProbe");
             var trustedResult = await runner.RunAsync(
@@ -453,7 +454,7 @@ public class PowerShellRunnerTests
                 action => Task.Run(action),
                 isElevated: static () => true,
                 trustedPowerShellModulePath: machineModulePath);
-            var lines = new List<Models.PowerShellLine>();
+            var lines = new List<PowerShellLine>();
             runner.LineReceived += lines.Add;
 
             var runspaceResults = await runner.RunAsync(commandName);
@@ -463,7 +464,7 @@ public class PowerShellRunnerTests
                     item.BaseObject?.ToString(),
                     marker,
                     StringComparison.Ordinal));
-            Assert.Contains(lines, line => line.Kind == Models.OutputKind.Error);
+            Assert.Contains(lines, line => line.Kind == OutputKind.Error);
 
             lines.Clear();
             var childExitCode = await runner.RunScriptViaPwshAsync(
@@ -522,13 +523,13 @@ public class PowerShellRunnerTests
     public async Task RunAsync_EmitsWarnings_AsWarningKind()
     {
         using var runner = new PowerShellRunner();
-        var lines = new System.Collections.Concurrent.ConcurrentQueue<Models.PowerShellLine>();
+        var lines = new System.Collections.Concurrent.ConcurrentQueue<PowerShellLine>();
         runner.LineReceived += lines.Enqueue;
 
         await runner.RunAsync("Write-Warning 'beware'");
 
         Assert.Contains(lines, line =>
-            line.Kind == Models.OutputKind.Warning && line.Text.Contains("beware", StringComparison.Ordinal));
+            line.Kind == OutputKind.Warning && line.Text.Contains("beware", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -543,13 +544,13 @@ public class PowerShellRunnerTests
     public async Task RunAsync_EmitsErrors_AsErrorKind()
     {
         using var runner = new PowerShellRunner();
-        var lines = new System.Collections.Concurrent.ConcurrentQueue<Models.PowerShellLine>();
+        var lines = new System.Collections.Concurrent.ConcurrentQueue<PowerShellLine>();
         runner.LineReceived += lines.Enqueue;
 
         await runner.RunAsync("Write-Error 'nope'");
 
         Assert.Contains(lines, line =>
-            line.Kind == Models.OutputKind.Error && line.Text.Contains("nope", StringComparison.Ordinal));
+            line.Kind == OutputKind.Error && line.Text.Contains("nope", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -593,7 +594,7 @@ public class PowerShellRunnerTests
     public async Task RunAsync_SupportsCancellation()
     {
         var runner = new PowerShellRunner();
-        var lines = new System.Collections.Concurrent.ConcurrentQueue<Models.PowerShellLine>();
+        var lines = new System.Collections.Concurrent.ConcurrentQueue<PowerShellLine>();
         runner.LineReceived += lines.Enqueue;
 
         using var cts = new CancellationTokenSource();
@@ -610,7 +611,7 @@ public class PowerShellRunnerTests
             nameof(RunAsync_SupportsCancellation));
         sw.Stop();
 
-        var errors = lines.Where(l => l.Kind == Models.OutputKind.Error).Select(l => l.Text).ToList();
+        var errors = lines.Where(l => l.Kind == OutputKind.Error).Select(l => l.Text).ToList();
         var diagnosis =
             $"elapsed {sw.Elapsed}; token fired at {(firedAtMs < 0 ? "NEVER" : $"{firedAtMs:F0} ms")}; "
             + $"exception {ex?.GetType().Name ?? "NONE"} ({ex?.Message ?? "-"}); {lines.Count} line(s) captured"

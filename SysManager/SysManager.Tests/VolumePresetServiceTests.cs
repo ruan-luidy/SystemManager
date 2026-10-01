@@ -4,8 +4,10 @@
 
 using System.IO;
 using System.Linq;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.AudioMixer;
+using SysManager.Features.AudioMixer.Models;
+using SysManager.Features.AudioMixer.Services;
+using SysManager.Shared.Models;
 
 namespace SysManager.Tests;
 

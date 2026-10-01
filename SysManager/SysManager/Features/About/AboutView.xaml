@@ -1,0 +1,355 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Features.About.AboutView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:helpers="clr-namespace:SysManager.Features.About.Helpers"
+             xmlns:v="clr-namespace:SysManager.Shared.Controls">
+
+    <Grid Background="{DynamicResource Surface0}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="28,24,28,28">
+
+                <!-- Header -->
+                <StackPanel>
+                    <TextBlock Text="About SysManager" Style="{StaticResource Display}"/>
+                    <TextBlock Text="Version info, updates and release notes." Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+                    <TextBlock Text="Built by laurentiu021 · MIT licensed" Style="{StaticResource Subtle}" Margin="0,2,0,0" Opacity="0.7"/>
+                </StackPanel>
+
+                <!-- Version card -->
+                <Border Style="{StaticResource Card}" Margin="0,20,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <!-- Report / environment status line, added below the button row. -->
+                            <RowDefinition Height="Auto"/>
+                            <!-- Startup update-check preference. -->
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="SysManager" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                                <Border Style="{StaticResource BadgeAccent}" Margin="12,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding CurrentVersion, StringFormat=v{0}}" Foreground="{DynamicResource TextOnAccent}" FontWeight="SemiBold" Style="{StaticResource Subtle}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Text="Local Windows system monitoring toolkit." Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                <TextBlock Text="BUILD" Style="{StaticResource SectionLabel}"/>
+                                <TextBlock Text="{Binding BuildDate}" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}"/>
+                                <TextBlock Text="LICENSE" Style="{StaticResource SectionLabel}"/>
+                                <TextBlock Text="MIT" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}"/>
+                                <TextBlock Text="SOURCE" Style="{StaticResource SectionLabel}"/>
+                                <TextBlock Margin="8,0,0,0" FontSize="12">
+                                    <Hyperlink Command="{Binding OpenRepoCommand}" Foreground="{DynamicResource Accent}">github.com/laurentiu021/SystemManager</Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="Check for updates" Command="{Binding CheckForUpdatesCommand}"
+                                    Style="{StaticResource PrimaryButton}"
+                                    IsEnabled="{Binding IsCheckingForUpdates, Converter={StaticResource BoolInvert}}"/>
+                            <Button Content="Export full report"
+                                    Command="{Binding ExportToFileCommand}"
+                                    Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"
+                                    IsEnabled="{Binding IsGeneratingReport, Converter={StaticResource BoolInvert}}"
+                                    ToolTip="Generate a comprehensive system report and choose where to save it."/>
+                            <Button Content="Copy full report"
+                                    Command="{Binding CopyReportCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    IsEnabled="{Binding IsGeneratingReport, Converter={StaticResource BoolInvert}}"
+                                    ToolTip="Generate a comprehensive system report and copy it to the clipboard."/>
+                            <Button Content="Copy environment info"
+                                    Command="{Binding CopyEnvironmentInfoCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    ToolTip="Copy your SysManager version, Windows version, architecture and elevation state — ready to paste into a bug report."/>
+                            <!-- One file instead of four manual steps. Producing evidence for a bug used to
+                                 mean copying the environment block, exporting the report, then leaving the
+                                 app to find the right day's log in a hidden AppData folder — which the
+                                 person most likely to hit a bug cannot do (#1650). The tooltip says what
+                                 goes in and that nothing is sent, because a zip whose contents you have to
+                                 take on trust is one a careful user will not attach. -->
+                            <Button Content="Save diagnostics bundle"
+                                    Command="{Binding SaveDiagnosticsBundleCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    IsEnabled="{Binding IsGeneratingReport, Converter={StaticResource BoolInvert}}"
+                                    AutomationProperties.Name="Save diagnostics bundle — one zip file to attach to a bug report"
+                                    ToolTip="Save one zip holding the system report, your environment info and the newest log files — everything a bug report needs. Nothing is sent anywhere; you choose where the file goes and whether to attach it."/>
+                            <!-- Only appears when a previous build was actually retained, so this is never
+                                 a button that cannot do anything. The updater used to be the one mutation
+                                 in the app with no way back: the atomic move that makes an INTERRUPTED
+                                 update safe also destroyed the outgoing executable, so a SUCCESSFUL
+                                 update into a broken build left nothing to return to. -->
+                            <Button Content="{Binding RollBackLabel}" Command="{Binding RollBackCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    Visibility="{Binding CanRollBack, Converter={StaticResource BoolToVis}}"
+                                    AutomationProperties.Name="Go back to the previous version of SysManager"
+                                    ToolTip="Reinstall the version you had before the last update. SysManager will close and reopen; your settings are not affected."/>
+                            <!-- The Preview banner asks users to "report anything unexpected on GitHub"
+                                 but nothing in the app took them there. This opens the bug form with the
+                                 version and elevation fields already filled in (see ReportProblem). -->
+                            <Button Content="Report a problem" Command="{Binding ReportProblemCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    AutomationProperties.Name="Report a problem on GitHub"
+                                    ToolTip="Open the bug-report form on GitHub, with your version and elevation state already filled in."/>
+                            <Button Content="Ask a question" Command="{Binding OpenDiscussionsCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    AutomationProperties.Name="Ask a question — open GitHub Discussions"
+                                    ToolTip="Open GitHub Discussions for questions and ideas — for anything that is not a bug."/>
+                            <Button Content="View license" Command="{Binding OpenLicenseCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
+                            <!-- OpenChangelogCommand existed alongside OpenRepo and OpenLicense from the
+                                 start, and was the one sibling nothing ever bound: the release notes
+                                 were only reachable by finding the repository by hand. Same style and
+                                 spacing as the license button beside it. -->
+                            <Button Content="What's new" Command="{Binding OpenChangelogCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    AutomationProperties.Name="What's new — open the changelog on GitHub"
+                                    ToolTip="See what changed in this and previous versions"/>
+                        </StackPanel>
+
+                        <!-- Report / environment results live here, next to the buttons that produce
+                             them. They previously wrote to UpdateStatus inside the update card below,
+                             so exporting a report replaced "Update available: vX.Y.Z" with
+                             "Report saved" — losing the more important message and making the update
+                             card describe something unrelated. Collapsed until there is something
+                             to say, so the row does not reserve empty space. -->
+                        <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
+                            <TextBlock Text="{Binding ReportStatus}"
+                                       Style="{StaticResource Subtle}" Margin="0,10,0,0" TextWrapping="Wrap"
+                                       Visibility="{Binding ReportStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
+                            <!-- Rollback feedback lives beside its own button rather than in the update
+                                 card below, for the same reason ReportStatus was moved here: writing to a
+                                 shared status line makes one action overwrite another's message. -->
+                            <TextBlock Text="{Binding RollBackStatus}"
+                                       Style="{StaticResource Subtle}" Margin="0,10,0,0" TextWrapping="Wrap"
+                                       Visibility="{Binding RollBackStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
+                        </StackPanel>
+
+                        <!-- The app's only outbound call, now something the user can see and switch
+                             off. Same shape and wording style as Bulk Installer's "Load app icons
+                             from the web" toggle: plain language, plus a tooltip naming exactly what
+                             does and does not leave the machine. Unchecking does NOT disable the
+                             "Check for updates" button above — that stays available on demand. -->
+                        <CheckBox Grid.Row="2" Grid.ColumnSpan="2" Margin="0,10,0,0"
+                                  Content="Check GitHub for a new version when SysManager starts"
+                                  IsChecked="{Binding CheckForUpdatesOnStartup, Mode=TwoWay}"
+                                  AutomationProperties.Name="Check GitHub for a new version when SysManager starts"
+                                  ToolTip="On by default, so you hear about fixes. SysManager asks GitHub's public releases page which version is newest — nothing about you or your PC is sent. Turn it off and the check runs only when you press Check for updates."/>
+                    </Grid>
+                </Border>
+
+                <!-- Update available card -->
+                <Border Style="{StaticResource Card}" Margin="0,16,0,0"
+                        BorderBrush="{DynamicResource Accent}" BorderThickness="1"
+                        Visibility="{Binding UpdateAvailable, Converter={StaticResource FlexVis}}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                               FontSize="18" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <TextBlock Text="Update available" Style="{StaticResource MetricCompact}"
+                                               Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding LatestVersionLabel}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding LatestPublishedLabel}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Download" Command="{Binding DownloadCommand}"
+                                        Style="{StaticResource PrimaryButton}" Padding="18,10" FontSize="14"
+                                        Visibility="{Binding ShowDownloadButton, Converter={StaticResource BoolToVis}}"/>
+                                <Button Content="Install" Command="{Binding InstallUpdateCommand}"
+                                        Style="{StaticResource PrimaryButton}" Padding="18,10" FontSize="14"
+                                        Visibility="{Binding DownloadedPath, Converter={StaticResource FlexVis}}"/>
+                                <Button Content="Manual download" Command="{Binding OpenManualDownloadCommand}"
+                                        Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                        Visibility="{Binding AutoDownloadFailed, Converter={StaticResource FlexVis}}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Download progress -->
+                        <StackPanel Margin="0,14,0,0"
+                                    Visibility="{Binding IsDownloading, Converter={StaticResource FlexVis}}">
+                            <ProgressBar AutomationProperties.Name="Update download progress" Height="6" Minimum="0" Maximum="100" Value="{Binding DownloadPercent}"/>
+                            <TextBlock Text="{Binding DownloadStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <!-- What is actually IN the update being offered. LatestNotes was assigned from the
+                             release body on every check and read by nothing, so the tab said a newer version
+                             existed and would not say what changed — the one question a user has before
+                             pressing Download. Same CardInner shape the history list below uses, and only
+                             when there is a body to show. -->
+                        <Border Style="{StaticResource CardInner}" Margin="0,14,0,0" Padding="12"
+                                Visibility="{Binding LatestNotes, Converter={StaticResource FlexVis}}">
+                            <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto">
+                                <TextBlock Text="{Binding LatestNotes}" Style="{StaticResource Subtle}"
+                                           TextWrapping="Wrap"
+                                           AutomationProperties.Name="What is new in the available update"/>
+                            </ScrollViewer>
+                        </Border>
+
+                        <!-- Download completed -->
+                        <StackPanel Margin="0,14,0,0" Orientation="Horizontal"
+                                    Visibility="{Binding DownloadedPath, Converter={StaticResource FlexVis}}">
+                            <Ellipse Width="10" Height="10" Fill="{DynamicResource Success}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="{Binding DownloadStatus}" Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                            <TextBlock VerticalAlignment="Center">
+                                <Hyperlink Command="{Binding OpenDownloadFolderCommand}" Foreground="{DynamicResource Accent}">Show file</Hyperlink>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- Download FAILED. The mirror of the row above, and the reason it has to exist:
+                             DownloadStatus was rendered in exactly two places, one gated on IsDownloading
+                             and one on DownloadedPath, and a failure leaves both false — IsDownloading is
+                             cleared in the command's finally, and DownloadedPath is never set. So all four
+                             failure messages were written to elements that had just gone invisible. The user
+                             pressed Download, watched the bar, and everything vanished; the only signal left
+                             was the Manual download button silently appearing (#2281).
+
+                             Warning rather than Danger, and the same brush for the dot and the text as the
+                             success row uses: an automatic download that failed with a working manual
+                             fallback is a setback, not a loss, and Danger is this app's destructive-action
+                             colour. Both clear 4.5:1 on the card (8.1:1 measured for the worse case).
+
+                             DockPanel, not the success row's horizontal StackPanel: these messages are long
+                             — "…a network issue or firewall blocking the connection. Try 'Manual download'
+                             as fallback." — and a child of a horizontal StackPanel is given infinite width,
+                             so TextWrapping would never take effect. -->
+                        <DockPanel Margin="0,14,0,0"
+                                   Visibility="{Binding AutoDownloadFailed, Converter={StaticResource FlexVis}}">
+                            <Ellipse DockPanel.Dock="Left" Width="10" Height="10" Fill="{DynamicResource Warning}"
+                                     VerticalAlignment="Top" Margin="0,5,8,0"/>
+                            <TextBlock Text="{Binding DownloadStatus}" Foreground="{DynamicResource Warning}"
+                                       FontWeight="SemiBold" TextWrapping="Wrap"
+                                       AutomationProperties.Name="Why the download failed"/>
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Up-to-date quiet card (or error with retry) -->
+                <Border Style="{StaticResource Card}" Margin="0,16,0,0"
+                        Visibility="{Binding UpdateAvailable, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <!-- Status dot: green normally, red when the last check failed to reach GitHub,
+                             so the colour agrees with the error message instead of always reading success. -->
+                        <Ellipse Grid.Column="0" Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{DynamicResource Success}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding UpdateCheckFailed}" Value="True">
+                                            <Setter Property="Fill" Value="{DynamicResource Danger}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock Grid.Column="1" Text="{Binding UpdateStatus}" Foreground="{DynamicResource TextSecondary}"
+                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <Button Grid.Column="2" Content="Retry" Command="{Binding CheckForUpdatesCommand}"
+                                Style="{StaticResource SecondaryButton}" Padding="14,6" Margin="12,0,0,0"
+                                IsEnabled="{Binding IsCheckingForUpdates, Converter={StaticResource BoolInvert}}"/>
+                    </Grid>
+                </Border>
+
+                <!-- What's new — full history -->
+                <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                    <StackPanel>
+                        <DockPanel>
+                            <TextBlock Text="What's new" Style="{StaticResource SectionTitle}"/>
+                            <Button Content="Refresh" Command="{Binding LoadHistoryCommand}" Style="{StaticResource GhostButton}"
+                                    HorizontalAlignment="Right" DockPanel.Dock="Right"/>
+                        </DockPanel>
+                        <TextBlock Text="Release notes pulled live from GitHub. Each entry shows the patch version, date and the full changelog."
+                                   Style="{StaticResource Subtle}" Margin="0,4,0,10" TextWrapping="Wrap"/>
+
+                        <ItemsControl ItemsSource="{Binding ReleaseHistory}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource CardInner}" Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Version}" Style="{StaticResource MetricCompact}" Foreground="{DynamicResource TextPrimary}"/>
+                                                <Border Margin="10,0,0,0" VerticalAlignment="Center"
+                                                        Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}"
+                                                        Style="{StaticResource BadgeAccent}">
+                                                    <TextBlock Text="Current" Foreground="{DynamicResource TextOnAccent}" Style="{StaticResource Caption}" FontWeight="SemiBold"/>
+                                                </Border>
+                                                <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                                <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding PublishedAt}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                                                <!-- A named link rather than a card-wide click target: these
+                                                     cards hold selectable text, and a clickable card fights
+                                                     text selection. The arrow marks that it leaves the app,
+                                                     which matters for a product whose pitch is that it does
+                                                     not phone home — the user should be able to tell when a
+                                                     click opens a browser. Hidden when the entry carries no
+                                                     url. -->
+                                                <TextBlock VerticalAlignment="Center" Margin="10,0,0,0" FontSize="12"
+                                                           Visibility="{Binding Url, Converter={StaticResource FlexVis}}">
+                                                    <Hyperlink Command="{Binding DataContext.OpenReleaseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                               CommandParameter="{Binding Url}"
+                                                               Foreground="{DynamicResource Accent}"
+                                                               AutomationProperties.Name="{Binding Version, StringFormat='View {0} on GitHub'}">View on GitHub ↗</Hyperlink>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <TextBlock helpers:MarkdownTextBlock.Markdown="{Binding Body}" Foreground="{DynamicResource TextSecondary}"
+                                                       TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- The fetch finished with nothing. Worse here than elsewhere because the line
+                             directly above promises notes "pulled live from GitHub" and then renders
+                             nothing at all, which reads as the feature being broken rather than the
+                             connection being down. Gated on the flag so it cannot appear while the request
+                             — the slowest thing on this tab — is still in flight. -->
+                        <v:EmptyState Glyph="&#xE704;"
+                                      Title="Could not reach GitHub"
+                                      Message="Release notes need a connection. Check yours and press Refresh."
+                                      Visibility="{Binding HistoryUnavailable, Converter={StaticResource FlexVis}}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Legal footer -->
+                <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Legal" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}">
+                            SysManager is released under the MIT License. The software is provided "AS IS", without warranty of any kind.
+                            All operations are local to your machine — no telemetry, no accounts. Updates are fetched from the public
+                            GitHub Releases API and downloaded directly from GitHub.
+                        </TextBlock>
+                        <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}">
+                            Some tools change system settings, the registry, or delete files. Use them at your own risk: review each
+                            action before confirming, and back up important data first. Where it can, SysManager creates a System
+                            Restore point before a system-altering operation and makes changes individually reversible.
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

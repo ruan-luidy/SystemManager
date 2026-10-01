@@ -5,8 +5,8 @@
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
-using SysManager.Helpers;
-using SysManager.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

@@ -83,12 +83,83 @@ internal static class TestPaths
     /// <summary>A file inside the app project, by the path segments below it.</summary>
     /// <param name="parts">The segments below the app project, for example <c>"Views", "AboutView.xaml"</c>.</param>
     /// <exception cref="FileNotFoundException">The file is not there, so the caller would assert over nothing.</exception>
+    /// <remarks>
+    /// The app is organised by feature (<c>Features/&lt;Page&gt;</c>, <c>Shared</c>, <c>Shell</c>), so a file is found
+    /// by its name when the segments still name the folder it had before that move — <c>"Views", "AboutView.xaml"</c>
+    /// resolves to <c>Features/About/AboutView.xaml</c>. File names are unique across the project, and a name that is
+    /// not would throw here rather than pick one of them.
+    /// </remarks>
     internal static string AppFile(params string[] parts)
     {
-        var path = Path.Combine([AppProject(), .. parts]);
+        var path = AppPath(parts);
         if (!File.Exists(path)) throw new FileNotFoundException($"Not found in the app project: {path}", path);
 
         return path;
+    }
+
+    /// <summary>Same as <see cref="AppFile"/>, but returns the path even when the file is not there.</summary>
+    /// <remarks>For the guards that ask <c>File.Exists</c> themselves, where a missing file is a valid answer.</remarks>
+    internal static string AppPath(params string[] parts)
+    {
+        var path = Path.Combine([AppProject(), .. parts]);
+        if (File.Exists(path)) return path;
+
+        var matches = SourceFiles(Path.GetFileName(path)).ToArray();
+        return matches.Length switch
+        {
+            1 => matches[0],
+            0 => path,
+            _ => throw new InvalidOperationException($"{Path.GetFileName(path)} is in {matches.Length} places in the app project"),
+        };
+    }
+
+    /// <summary>Every view: the XAML of each page, the shared controls and the shell's popups, with their code-behind.</summary>
+    /// <param name="pattern">A file pattern, for example <c>"*.xaml"</c> or <c>"*View.xaml.cs"</c>.</param>
+    /// <remarks>
+    /// What the <c>Views</c> folder held before the app was organised by feature. <c>App.xaml</c> and the main window
+    /// were never in it, and stay out.
+    /// </remarks>
+    internal static IEnumerable<string> ViewFiles(string pattern = "*.xaml") =>
+        SourceFiles(pattern).Where(file =>
+            (file.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase) || file.EndsWith(".xaml.cs", StringComparison.OrdinalIgnoreCase))
+            && !Path.GetFileName(file).StartsWith("App.xaml", StringComparison.OrdinalIgnoreCase)
+            && !Path.GetFileName(file).StartsWith("MainWindow.xaml", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Every view model, plus the navigation types and shared state that lived beside them.</summary>
+    /// <param name="pattern">A file pattern, for example <c>"*ViewModel.cs"</c>.</param>
+    /// <remarks>What the <c>ViewModels</c> folder held before the app was organised by feature.</remarks>
+    internal static IEnumerable<string> ViewModelFiles(string pattern = "*.cs") =>
+        SourceFiles(pattern).Where(file =>
+            Path.GetFileName(file).EndsWith("ViewModel.cs", StringComparison.Ordinal)
+            || ViewModelNeighbours.Contains(Path.GetFileName(file)));
+
+    /// <summary>Every source file of a layer folder — <c>Services</c>, <c>Models</c> or <c>Helpers</c> — shared or a page's own.</summary>
+    /// <param name="layer">The folder name: <c>Shared/Services</c> and <c>Features/&lt;Page&gt;/Services</c> are both "Services".</param>
+    /// <param name="pattern">A file pattern, for example <c>"*.cs"</c>.</param>
+    internal static IEnumerable<string> LayerFiles(string layer, string pattern = "*.cs") =>
+        SourceFiles(pattern).Where(file => Path.GetFileName(Path.GetDirectoryName(file)) == layer);
+
+    /// <summary>Whether <paramref name="path"/> is a source file of a layer folder (see <see cref="LayerFiles"/>).</summary>
+    internal static bool IsLayerFile(string path, string layer) =>
+        Path.GetFileName(Path.GetDirectoryName(path)) == layer;
+
+    /// <summary>Whether <paramref name="path"/> is one of the files <see cref="ViewModelFiles"/> returns.</summary>
+    internal static bool IsViewModelFile(string path) =>
+        Path.GetFileName(path).EndsWith("ViewModel.cs", StringComparison.Ordinal)
+        || ViewModelNeighbours.Contains(Path.GetFileName(path));
+
+    private static readonly HashSet<string> ViewModelNeighbours =
+        ["NavGroup.cs", "NavItem.cs", "ViewModelBase.cs", "NetworkSharedState.cs"];
+
+    /// <summary>The app's source files matching <paramref name="pattern"/>, wherever they are, without build output.</summary>
+    internal static IEnumerable<string> SourceFiles(string pattern)
+    {
+        var app = AppProject();
+        var bin = Path.Combine(app, "bin") + Path.DirectorySeparatorChar;
+        var obj = Path.Combine(app, "obj") + Path.DirectorySeparatorChar;
+        return Directory.EnumerateFiles(app, pattern, SearchOption.AllDirectories)
+            .Where(file => !file.StartsWith(bin, StringComparison.OrdinalIgnoreCase) && !file.StartsWith(obj, StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>A directory inside the app project, by the path segments below it.</summary>

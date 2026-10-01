@@ -2,10 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
-using static SysManager.Services.HealthAnalyzer;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
+using static SysManager.Shared.Services.HealthAnalyzer;
 
 namespace SysManager.Tests;
 

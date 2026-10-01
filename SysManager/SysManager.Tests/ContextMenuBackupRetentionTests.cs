@@ -3,7 +3,8 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Services;
+using SysManager.Features.ContextMenu;
+using SysManager.Features.ContextMenu.Services;
 
 namespace SysManager.Tests;
 

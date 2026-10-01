@@ -3,7 +3,7 @@
 // License: MIT
 
 using System.Globalization;
-using SysManager.Helpers;
+using SysManager.Shared.Helpers;
 using Xunit;
 
 namespace SysManager.Tests;

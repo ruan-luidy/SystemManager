@@ -4,8 +4,8 @@
 
 using Microsoft.Win32;
 using NSubstitute;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.Privacy;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

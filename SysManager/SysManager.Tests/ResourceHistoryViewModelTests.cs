@@ -6,9 +6,10 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.ResourceHistory;
+using SysManager.Features.ResourceHistory.Models;
+using SysManager.Features.ResourceHistory.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

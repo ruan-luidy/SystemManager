@@ -3,8 +3,8 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.EnvironmentVariables;
+using SysManager.Features.EnvironmentVariables.Services;
 
 namespace SysManager.Tests;
 

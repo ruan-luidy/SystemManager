@@ -2,9 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Helpers;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.SystemHealth;
+using SysManager.Features.SystemHealth.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 
@@ -67,6 +68,6 @@ public class SystemHealthViewModelExtendedTests
     public void IsElevated_MatchesCurrentProcess()
     {
         var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService());
-        Assert.Equal(Helpers.AdminHelper.IsElevated(), vm.IsElevated);
+        Assert.Equal(AdminHelper.IsElevated(), vm.IsElevated);
     }
 }

@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Shared.Helpers;
+
 namespace SysManager.UITests;
 
 /// <summary>
@@ -39,7 +41,7 @@ public class AdminBannerUiTests
     /// Each privileged tab shows the elevation banner that matches the session it is running in.
     /// </summary>
     /// <remarks>
-    /// This used to open with <c>if (Helpers.AdminHelper.IsElevated()) return;</c> — a silent skip so an
+    /// This used to open with <c>if (AdminHelper.IsElevated()) return;</c> — a silent skip so an
     /// elevated session would not report a false failure. On the CI runner, which IS elevated, that meant
     /// all nine cases returned before reaching the tab: nine green rows asserting nothing. Every tab has
     /// both banner variants, so there is nothing to skip; asserting the one that belongs to the current
@@ -54,7 +56,7 @@ public class AdminBannerUiTests
     {
         _fx.GoToTab(navId);
 
-        var elevated = Helpers.AdminHelper.IsElevated();
+        var elevated = AdminHelper.IsElevated();
         var expected = elevated ? "Running as administrator" : "requires administrator";
         Assert.True(
             _fx.HasText(expected),

@@ -1,0 +1,273 @@
+// SysManager · AppUpdatesViewModel
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Serilog;
+using SysManager.Shared;
+using SysManager.Shared.Controls;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
+
+namespace SysManager.Features.AppUpdates;
+
+public sealed partial class AppUpdatesViewModel : ViewModelBase
+{
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
+
+    private readonly IWingetService _winget;
+    private readonly EtaCalculator _upgradeEta = new();
+    private CancellationTokenSource? _cts;
+    private readonly Action<PowerShellLine> _lineHandler;
+
+    /// <summary>
+    /// Shown when winget.exe cannot be launched — App Installer isn't present or its
+    /// execution alias is off (common on older/LTSC/Server machines). Plain-language so
+    /// the non-technical persona knows the tab needs App Installer, not that something broke.
+    /// <para>Forwards to <see cref="WingetFailure.WingetUnavailable"/>. The literal used to live here
+    /// and be referenced cross-VM, which is how Bulk Installer ended up not using it at all; the
+    /// shared helper is now the single source for all three winget tabs. Kept as an alias so the
+    /// existing call sites and their tests still read naturally.</para>
+    /// </summary>
+    internal const string WingetUnavailableMessage = WingetFailure.WingetUnavailable;
+
+    /// <summary>The empty state's title, and the status line, after a scan that could not finish.</summary>
+    internal const string CheckFailedTitle = "Couldn't check for updates";
+
+    public BulkObservableCollection<AppPackage> Packages { get; } = new();
+    public ConsoleViewModel Console { get; } = new();
+
+    [ObservableProperty] private bool _selectAll = true;
+    [ObservableProperty] private string _upgradeEtaText = string.Empty;
+    [ObservableProperty] private bool _isElevated;
+
+    // Distinguishes the un-run state from a completed zero-result scan so the empty-state overlay
+    // doesn't assert "No updates available — all packages are up to date" before the user has ever
+    // scanned. Set true only after a scan completes (see ScanAsync).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private bool _hasScanned;
+
+    // Why the last scan failed, or null. Takes the empty state over, because a failed check is neither "not
+    // scanned yet" nor "up to date" — and "up to date" is what a failed winget query used to read as (#2461).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private string? _scanFailure;
+
+    public string EmptyTitle => ScanFailure is not null ? CheckFailedTitle
+        : HasScanned ? "No updates available" : "Not scanned yet";
+    public string EmptyMessage => ScanFailure
+        ?? (HasScanned ? "All detected packages are up to date." : "Run a check to scan for winget upgrades.");
+
+    public AppUpdatesViewModel(IWingetService winget)
+    {
+        _winget = winget;
+        _lineHandler = line => Console.Append(line);
+        // Re-evaluate the long-running commands' CanExecute when IsBusy flips. Scan and
+        // UpgradeSelected both recreate the shared _cts; without this gate a second
+        // command could dispose the CTS the first is still awaiting (ObjectDisposedException).
+        PropertyChanged += OnVmPropertyChanged;
+        IsElevated = SysManager.Shared.Helpers.AdminHelper.IsElevated();
+    }
+
+    /// <summary>
+    /// Gate for the long-running commands. Scan and UpgradeSelected share <see cref="_cts"/>
+    /// and each recreates it, so disabling both while one runs prevents a second command
+    /// from disposing the CTS mid-flight. Cancel is intentionally NOT gated — it must stay
+    /// enabled while an operation runs. Mirrors WindowsUpdateViewModel.
+    /// </summary>
+    private bool NotBusy => !IsBusy;
+
+    /// <summary>
+    /// Copies the user's ticks from the previous scan onto a fresh package list, matched by package id.
+    /// </summary>
+    /// <remarks>
+    /// An <see cref="AppPackage"/> is selected by DEFAULT, so a rescan did not merely forget the user's
+    /// choice — it reversed it. Every package they unticked came back ticked, and "Upgrade selected" then
+    /// installed it. <c>RefreshOnF5</c> is <c>ScanCommand</c>, so pressing F5 was enough (#2304).
+    /// <para>An empty <paramref name="previous"/> is the first scan, the only time the default is the
+    /// answer. A previous list that is present with nothing selected is a DECISION — the user unticked
+    /// everything — which is why this tests the collection being empty rather than whether anything in it
+    /// is selected.</para>
+    /// <para>Keyed on the package id ALONE, deliberately not on the version. A rescan can find a newer
+    /// available version for the same package, and "do not upgrade this app" does not stop being true
+    /// because the version on offer changed.</para>
+    /// </remarks>
+    internal static void CarryForwardSelection(
+        IReadOnlyCollection<AppPackage> previous, IReadOnlyCollection<AppPackage> fresh)
+    {
+        SelectionCarry.Apply(previous, fresh, p => p.Id, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(IsBusy)) return;
+        ScanCommand.NotifyCanExecuteChanged();
+        UpgradeSelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        Log.Information("Admin elevation requested from App Updates tab");
+        if (SysManager.Shared.Helpers.AdminHelper.RelaunchAsAdmin())
+            App.RequestShutdown();
+    }
+
+    partial void OnSelectAllChanged(bool value)
+    {
+        foreach (var p in Packages) p.IsSelected = value;
+    }
+
+    [RelayCommand(CanExecute = nameof(NotBusy))]
+    private async Task ScanAsync()
+    {
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Querying winget...";
+        ScanFailure = null;
+
+        // Snapshot the user's ticks BEFORE the list is cleared below — after that there is nothing left to
+        // read them from.
+        var previous = Packages.ToList();
+
+        Packages.Clear();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        _winget.LineReceived += _lineHandler; // op-scoped subscription (see constructor note)
+        try
+        {
+            var list = await _winget.ListUpgradableAsync(_cts.Token);
+            CarryForwardSelection(previous, list);
+            Packages.ReplaceWith(list);
+            HasScanned = true;
+            StatusMessage = $"{Packages.Count} upgradable package(s) found";
+        }
+        catch (OperationCanceledException) { StatusMessage = "Scan cancelled."; }
+        // The query failed rather than finding nothing. The reason is already a sentence (#2461).
+        catch (InvalidOperationException ex)
+        {
+            ScanFailure = ex.Message;
+            StatusMessage = CheckFailedTitle + ".";
+        }
+        // winget.exe missing (App Installer not present / execution alias off) throws
+        // Win32Exception "cannot find the file specified" from Process.Start. Without this
+        // it escapes the AsyncRelayCommand to the global dispatcher handler and pops a raw
+        // OS-error dialog on the tab's first action. Mirror UninstallerViewModel's handling.
+        catch (System.ComponentModel.Win32Exception)
+        {
+            ScanFailure = WingetUnavailableMessage;
+            StatusMessage = WingetUnavailableMessage;
+        }
+        finally { _winget.LineReceived -= _lineHandler; IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    [RelayCommand(CanExecute = nameof(NotBusy))]
+    private async Task UpgradeSelectedAsync()
+    {
+        var toUpgrade = Packages.Where(p => p.IsSelected).ToList();
+        if (toUpgrade.Count == 0) { StatusMessage = "No packages selected"; return; }
+
+        // Confirm, because upgrading restarts apps and cannot be undone — and because the SAME action on
+        // the Dashboard already asks ("Confirm Update All Apps"), so without this the app asked in one
+        // place and not the other for identical consequences. Names the apps when there are few enough to
+        // read, since "3 apps" tells the user less than which three.
+        var names = toUpgrade.Count <= 5
+            ? "\n\n" + string.Join("\n", toUpgrade.Select(p => "• " + p.Name))
+            : "";
+        if (!DialogService.Instance.Confirm(
+                $"Upgrade {toUpgrade.Count} app{(toUpgrade.Count == 1 ? "" : "s")} via winget?{names}\n\n" +
+                WingetFailure.UpgradeWarning,
+                "Confirm App Upgrade"))
+        {
+            return;
+        }
+
+        // Windows Installer runs one installation at a time process-wide, so an MSI package upgraded here
+        // while Bulk Installer or Uninstaller is also mid-run can fail with exit code 1618. The same lock
+        // stops any two of the three from overlapping (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Install, "App Updates");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Install)} is already running.";
+            return;
+        }
+
+        IsBusy = true;
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        int attempted = 0, succeeded = 0, failed = 0;
+        var wingetUnavailable = false;
+        UpgradeEtaText = string.Empty;
+        _upgradeEta.Reset();
+        _winget.LineReceived += _lineHandler; // op-scoped subscription (see constructor note)
+        try
+        {
+            foreach (var pkg in toUpgrade)
+            {
+                if (_cts.IsCancellationRequested) break;
+                pkg.Status = "Upgrading…";
+                StatusMessage = $"Upgrading {pkg.Name} ({attempted + 1}/{toUpgrade.Count})";
+                Progress = (int)((attempted / (double)toUpgrade.Count) * 100);
+                UpgradeEtaText = _upgradeEta.Update(Progress);
+                try
+                {
+                    // WingetResult carries a friendly message translated from the exit code,
+                    // so the per-app status is human-readable (never a raw "exit 0x8A15…").
+                    var result = await _winget.UpgradeAsync(pkg.Id, _cts.Token);
+                    pkg.Status = result.FriendlyMessage;
+                    if (result.Succeeded) succeeded++; else failed++;
+                }
+                catch (OperationCanceledException) { pkg.Status = "Cancelled"; break; }
+                catch (InvalidOperationException ex) { pkg.Status = $"Error: {ex.Message}"; failed++; }
+                // A single invalid package Id throws ArgumentException from UpgradeAsync
+                // BEFORE any process runs; record it on the row and keep upgrading the rest
+                // rather than aborting the whole batch.
+                catch (ArgumentException ex) { pkg.Status = $"Error: {ex.Message}"; failed++; }
+                // winget.exe missing throws Win32Exception. It won't reappear mid-batch, so
+                // report it once and stop rather than failing every remaining row identically.
+                catch (System.ComponentModel.Win32Exception)
+                {
+                    pkg.Status = "winget unavailable";
+                    wingetUnavailable = true;
+                    break;
+                }
+                attempted++;
+            }
+            Progress = 100;
+            UpgradeEtaText = string.Empty;
+            // Honest summary: separate succeeded from failed, and only mention failures
+            // when there are any. If winget itself is missing, keep the friendly
+            // "install App Installer" message instead of a misleading "Updated 0 of N".
+            StatusMessage = wingetUnavailable
+                ? WingetUnavailableMessage
+                : failed == 0
+                    ? $"Updated {succeeded} of {toUpgrade.Count}."
+                    : $"Updated {succeeded} of {toUpgrade.Count} · {failed} failed.";
+            Log.Information("App upgrade batch: {Succeeded} ok, {Failed} failed of {Total}",
+                succeeded, failed, toUpgrade.Count);
+        }
+        finally { _winget.LineReceived -= _lineHandler; IsBusy = false; UpgradeEtaText = string.Empty; }
+    }
+
+    [RelayCommand]
+    private void Cancel() => _cts?.Cancel();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _winget.LineReceived -= _lineHandler;
+            PropertyChanged -= OnVmPropertyChanged;
+            _cts?.Cancel();
+            _cts?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+}

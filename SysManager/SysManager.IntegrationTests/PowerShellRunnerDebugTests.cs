@@ -2,7 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 
@@ -13,7 +14,7 @@ public class PowerShellRunnerDebugTests
     public async Task RunAsync_OutputStream_FiresAtLeastOneLine_OfAnyKind()
     {
         var runner = new PowerShellRunner();
-        var linesSeen = new System.Collections.Concurrent.ConcurrentBag<(Models.OutputKind Kind, string Text)>();
+        var linesSeen = new System.Collections.Concurrent.ConcurrentBag<(OutputKind Kind, string Text)>();
         runner.LineReceived += l => linesSeen.Add((l.Kind, l.Text));
         await runner.RunAsync("'hello'; Write-Output 'second'");
 

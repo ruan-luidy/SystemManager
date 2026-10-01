@@ -6,7 +6,8 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
-using SysManager.Services;
+using SysManager.Features.BulkInstaller;
+using SysManager.Features.BulkInstaller.Services;
 
 namespace SysManager.Tests;
 

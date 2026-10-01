@@ -3,7 +3,7 @@
 // License: MIT
 
 using System.Text.Json;
-using SysManager.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

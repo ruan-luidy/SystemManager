@@ -4,7 +4,8 @@
 
 using System;
 using System.IO;
-using SysManager.Services;
+using SysManager.Features.About;
+using SysManager.Features.About.Services;
 
 namespace SysManager.Tests;
 

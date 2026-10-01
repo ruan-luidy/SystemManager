@@ -3,7 +3,8 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Services;
+using SysManager.Features.DuplicateFile;
+using SysManager.Features.DuplicateFile.Services;
 
 namespace SysManager.IntegrationTests;
 

@@ -1,0 +1,344 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Features.ContextMenu.ContextMenuView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SysManager.Features.ContextMenu"
+             xmlns:v="clr-namespace:SysManager.Shared.Controls"
+             d:DataContext="{d:DesignInstance vm:ContextMenuViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{DynamicResource Surface0}">
+
+    <UserControl.Resources>
+        <!--
+            The Menu Style buttons had no way to show which style is currently applied.
+            ActivePresetId was maintained at four sites — seeded from the registry on load, set on every
+            Apply, and set to "custom" the moment any individual entry is toggled — and read by nothing, so
+            the tab asked the user to choose between three options without saying which one they were on.
+            The view even carried a comment reading "Custom indicator" above a button that indicated nothing.
+
+            AccentSoft fill plus an Accent border, the pair already used for the highlighted card in Deep
+            Cleanup, and NOT PrimaryButton: a purple fill is reserved for primary ACTIONS, while this is a
+            state. The tick carries the same meaning for anyone who cannot separate the two fills, and it is
+            what the accessible name appends so a screen reader says it too.
+
+            One style, three buttons, discriminated by ConverterParameter — the button's own preset id.
+        -->
+        <Style x:Key="PresetButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+
+        <!--
+            Three thin styles rather than one: a DataTrigger's ConverterParameter cannot be a binding, so each
+            button's own preset id has to be a literal. They differ in that one value and nothing else.
+
+            Content and AutomationProperties.Name are SETTERS here, not attributes on the buttons, because a
+            local value on the element outranks a style trigger in WPF's precedence order — leaving them on
+            the buttons made the tick and the state-carrying name silently dead while the fill still changed,
+            which is the same defect this whole change set is closing, one layer down.
+            NoLocalValueOutranksAStyleTriggerThatSetsIt pins it.
+        -->
+        <Style x:Key="PresetButtonWin10" TargetType="Button" BasedOn="{StaticResource PresetButton}">
+            <Setter Property="Content" Value="Win10 Default"/>
+            <Setter Property="AutomationProperties.Name" Value="Apply Win10 Default menu style"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ActivePresetId, Converter={StaticResource IsEqual}, ConverterParameter=win10}" Value="True">
+                    <Setter Property="Content" Value="✓ Win10 Default"/>
+                    <Setter Property="AutomationProperties.Name" Value="Win10 Default — the menu style currently applied"/>
+                    <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="PresetButtonWin11" TargetType="Button" BasedOn="{StaticResource PresetButton}">
+            <Setter Property="Content" Value="Win11 Default"/>
+            <Setter Property="AutomationProperties.Name" Value="Apply Win11 Default menu style"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ActivePresetId, Converter={StaticResource IsEqual}, ConverterParameter=win11}" Value="True">
+                    <Setter Property="Content" Value="✓ Win11 Default"/>
+                    <Setter Property="AutomationProperties.Name" Value="Win11 Default — the menu style currently applied"/>
+                    <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="PresetButtonCustom" TargetType="Button" BasedOn="{StaticResource PresetButton}">
+            <Setter Property="Content" Value="Custom"/>
+            <Setter Property="AutomationProperties.Name" Value="Apply Custom menu style"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ActivePresetId, Converter={StaticResource IsEqual}, ConverterParameter=custom}" Value="True">
+                    <Setter Property="Content" Value="✓ Custom"/>
+                    <Setter Property="AutomationProperties.Name" Value="Custom — the menu style currently applied"/>
+                    <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="28,24,28,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Context Menu Manager" Style="{StaticResource Display}"/>
+            <TextBlock Text="Manage entries that appear when you right-click files, folders, or the desktop in Windows Explorer. Toggle entries to show or hide them — changes are non-destructive and reversible."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            <!-- Says the export exists. It was written before every change and mentioned nowhere, so a file a
+                 user could have double-clicked was an invisible folder that only grew (#2369). Worded not to
+                 oversell it: the toggle above is the undo, and this is for someone who knows what a .reg is. -->
+            <TextBlock Text="Before each change, a copy of the affected registry key is saved to %LocalAppData%\SysManager\Backups\ContextMenu — the three most recent per entry are kept. You do not need it to undo anything: the toggle does that. It is there if you would rather restore the key by hand."
+                       Style="{StaticResource Caption}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Elevation banner -->
+        <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
+                       NotElevatedMessage="Some entries require administrator privileges to toggle."
+                       ElevatedMessage="Running as administrator — full access to all context menu entries."/>
+
+        <!-- Menu Style (Presets) -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="14">
+            <StackPanel>
+                <TextBlock Text="MENU STYLE" Style="{StaticResource Caption}" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextMuted}" Margin="0,0,0,10"/>
+                <StackPanel Orientation="Horizontal">
+                    <!-- Win10 button with hover preview -->
+                    <Button Command="{Binding ApplyPresetCommand}" CommandParameter="win10"
+                            Style="{StaticResource PresetButtonWin10}">
+                        <Button.ToolTip>
+                            <ToolTip Placement="Bottom" MaxWidth="520">
+                                <StackPanel>
+                                    <TextBlock Text="Classic Full Context Menu (Win10 Style)" FontWeight="SemiBold" Style="{StaticResource Body}" Margin="0,0,0,6"/>
+                                    <TextBlock Text="This is actually the Win11 menu after clicking &quot;Show more options&quot; — but applied permanently. All entries visible on first right-click, no extra clicks needed."
+                                               Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Caption}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Default (clean)" FontSize="10" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win10-default.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="Custom (all entries ON)" FontSize="10" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win10-custom-max.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <TextBlock Text="ⓘ Hover for preview" FontSize="10" Foreground="{DynamicResource TextMuted}" Margin="0,6,0,0" FontStyle="Italic"/>
+                                </StackPanel>
+                            </ToolTip>
+                        </Button.ToolTip>
+                    </Button>
+                    <!-- Win11 button with hover preview -->
+                    <Button Command="{Binding ApplyPresetCommand}" CommandParameter="win11"
+                            Style="{StaticResource PresetButtonWin11}">
+                        <Button.ToolTip>
+                            <ToolTip Placement="Bottom" MaxWidth="520">
+                                <StackPanel>
+                                    <TextBlock Text="Modern Compact Context Menu (Win11 Style)" FontWeight="SemiBold" Style="{StaticResource Body}" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Compact menu with icons. Custom entries appear only after clicking &quot;Show more options&quot; at the bottom. The expanded view is identical to Win10 Default."
+                                               Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Caption}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Default (compact)" FontSize="10" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win11-default.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="Custom (compact)" FontSize="10" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win11-custom-max.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="After &quot;Show more options&quot;" FontSize="10" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <Image Source="/Resources/ctx-win11-show-more.png" MaxHeight="200" Stretch="Uniform"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <TextBlock Text="ⓘ Hover for preview" FontSize="10" Foreground="{DynamicResource TextMuted}" Margin="0,6,0,0" FontStyle="Italic"/>
+                                </StackPanel>
+                            </ToolTip>
+                        </Button.ToolTip>
+                    </Button>
+                    <!-- Custom indicator -->
+                    <Button Command="{Binding ApplyPresetCommand}" CommandParameter="custom"
+                            Style="{StaticResource PresetButtonCustom}"
+                            ToolTip="Active menu style + your manual entry toggles from the list below. Toggle any entry to switch to Custom mode."/>
+                </StackPanel>
+                <TextBlock Text="ⓘ Hover over Win10/Win11 buttons for a visual preview of each menu style."
+                           Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}" Margin="0,8,0,0" FontStyle="Italic"/>
+                <TextBlock Text="{Binding PresetDescription}" Foreground="{DynamicResource TextMuted}"
+                           Style="{StaticResource Caption}" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding PresetDescription, Converter={StaticResource FlexVis}}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                    <ComboBox ItemsSource="{Binding LocationFilters}"
+                              SelectedItem="{Binding SelectedLocation}"
+                              AutomationProperties.Name="Filter by location"
+                              Width="160" Margin="0,0,8,0"
+                              VerticalAlignment="Center"/>
+                    <Grid Width="200" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Search entries"/>
+                        <TextBlock Text="Search entries…" IsHitTestVisible="False"
+                                   Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
+                                   VerticalAlignment="Center" Style="{StaticResource Subtle}"
+                                   Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                    </Grid>
+                    <Button Content="Refresh" Command="{Binding RefreshCommand}"
+                            AutomationProperties.Name="Refresh entries"
+                            Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                    <!-- Explorer decides which add-ons to load when it starts, so blocking one is
+                         invisible until it restarts. Without this the tab would say "blocked" while the
+                         item stayed in the menu. -->
+                    <Button Content="Restart Explorer" Command="{Binding RestartExplorerCommand}"
+                            AutomationProperties.Name="Restart Explorer to apply add-on changes"
+                            ToolTip="Applies changes to add-ons. Closes all open File Explorer windows and starts it again — your files are not affected."
+                            Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                    <CheckBox Content="Show system entries"
+                              IsChecked="{Binding ShowSystemEntries}"
+                              AutomationProperties.Name="Show system entries"
+                              VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </StackPanel>
+                <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right"
+                           Style="{StaticResource Subtle}">
+                    <Run Text="{Binding EnabledCount, Mode=OneWay}"/> enabled ·
+                    <Run Text="{Binding DisabledCount, Mode=OneWay}"/> disabled ·
+                    <Run Text="{Binding TotalCount, Mode=OneWay}"/> shown
+                </TextBlock>
+            </DockPanel>
+        </Border>
+
+        <!-- Context menu entries list -->
+        <Border Grid.Row="4" Style="{StaticResource Card}" Padding="0">
+            <Grid>
+            <DataGrid AutomationProperties.Name="Context menu entries"
+                      ItemsSource="{Binding Entries}"
+                      AutoGenerateColumns="False" HeadersVisibility="Column"
+                      CanUserAddRows="False"
+                      Background="Transparent" BorderThickness="0"
+                      GridLinesVisibility="None" IsReadOnly="False"
+                      SelectionMode="Single" CanUserSortColumns="True"
+                      CanUserResizeColumns="True"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling">
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="" Width="62" MinWidth="62" CanUserResize="False" CanUserSort="False">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <!-- Both kinds of row toggle now: a verb through LegacyDisable, a handler
+                                     through the machine-wide Blocked list (#1510). The switch is live in
+                                     both cases, and the trigger explains what the handler case costs —
+                                     administrator rights, plus an Explorer restart before the menu
+                                     changes. The failure path offers to relaunch elevated, so an
+                                     unelevated click is answered rather than ignored. -->
+                                <ToggleButton IsChecked="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}"
+                                              Command="{Binding DataContext.ToggleEntryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              CommandParameter="{Binding}"
+                                              AutomationProperties.Name="{Binding Name, StringFormat='Toggle {0}'}"
+                                              VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <ToggleButton.Style>
+                                        <Style TargetType="ToggleButton" BasedOn="{StaticResource ToggleSwitch}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding RequiresElevation}" Value="True">
+                                                    <Setter Property="ToolTip"
+                                                            Value="This is an add-on, so hiding it is a machine-wide setting: it needs administrator rights, and it applies once Explorer restarts. Nothing the program installed is deleted — turning this back on undoes it."/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ToggleButton.Style>
+                                </ToggleButton>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTemplateColumn Header="Name" Width="*" MinWidth="150" SortMemberPath="Name" IsReadOnly="True">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="4,4" VerticalAlignment="Center">
+                                    <StackPanel.ToolTip>
+                                        <StackPanel MaxWidth="500">
+                                            <TextBlock FontWeight="SemiBold" Text="Registry Name:"/>
+                                            <TextBlock Text="{Binding RawName}" TextWrapping="Wrap" Margin="0,2,0,6"/>
+                                            <TextBlock FontWeight="SemiBold" Text="Full Command:"/>
+                                            <TextBlock Text="{Binding Command}" TextWrapping="Wrap" Margin="0,2,0,4"/>
+                                            <TextBlock FontWeight="SemiBold" Text="Registry Path:"/>
+                                            <TextBlock Text="{Binding RegistryPath}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </StackPanel.ToolTip>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
+                                    <TextBlock Text="{Binding Explanation}" Foreground="{DynamicResource TextMuted}"
+                                               Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                               MaxWidth="450" HorizontalAlignment="Left" Margin="0,1,0,0"
+                                               Visibility="{Binding Explanation, Converter={StaticResource FlexVis}}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Which registration shape the row came from. One list rather than two tabs, because
+                         the user's problem is "my right-click menu is full of junk" and she has no reason to
+                         care that Windows stores the junk two different ways — but the rows behave
+                         differently, so the difference has to be legible. -->
+                    <DataGridTextColumn Header="Type" Binding="{Binding KindLabel}" Width="100" MinWidth="80"
+                                        SortMemberPath="Kind" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
+                    <DataGridTextColumn Header="Applies to" Binding="{Binding Location}" Width="150" MinWidth="100"
+                                        SortMemberPath="Location" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
+                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="130" MinWidth="80"
+                                        SortMemberPath="Source" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- Empty state -->
+            <v:EmptyState Glyph="&#xE946;"
+                          Title="No context menu entries"
+                          Message="Run a scan to list right-click menu entries you can toggle."
+                          Visibility="{Binding Entries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
+        </Border>
+
+        <!-- Status bar -->
+        <v:StatusFooter Grid.Row="5" Margin="0,8,0,0" ProgressName="Context menu scan progress"/>
+    </Grid>
+</UserControl>

@@ -4,7 +4,7 @@
 
 using System.Windows;
 using System.Windows.Controls;
-using SysManager.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 

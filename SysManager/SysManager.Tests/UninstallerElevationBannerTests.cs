@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Xml.Linq;
+using SysManager.Features.Uninstaller;
 
 namespace SysManager.Tests;
 
@@ -101,10 +102,10 @@ public class UninstallerElevationBannerTests
         // `NotBusy && HasApps && !IsElevated`, so on an unscanned list HasApps is false and CanExecute
         // returns false no matter what elevation says — asserting only the elevated case would pass with
         // the elevation term deleted, which is precisely the change this test exists to catch.
-        var vm = new SysManager.ViewModels.UninstallerViewModel(
-            new SysManager.Services.UninstallerService(new SysManager.Services.PowerShellRunner()));
+        var vm = new SysManager.Features.Uninstaller.UninstallerViewModel(
+            new SysManager.Features.Uninstaller.Services.UninstallerService(new SysManager.Shared.Services.PowerShellRunner()));
         vm.IsElevated = false;
-        vm.AllApps.Add(new SysManager.Models.InstalledApp { Name = "app", Id = "id" });
+        vm.AllApps.Add(new SysManager.Features.Uninstaller.Models.InstalledApp { Name = "app", Id = "id" });
         vm.FilterText = "app";   // triggers ApplyFilter, which refreshes AppCount
         vm.FilterText = "";
 

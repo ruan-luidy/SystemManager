@@ -4,8 +4,8 @@
 
 using System.IO;
 using System.Reflection;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.LargeFiles;
+using SysManager.Features.LargeFiles.Services;
 
 namespace SysManager.Tests;
 

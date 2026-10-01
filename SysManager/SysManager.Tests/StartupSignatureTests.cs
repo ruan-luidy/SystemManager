@@ -3,9 +3,11 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.Startup;
+using SysManager.Features.Startup.Models;
+using SysManager.Features.Startup.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
 
 namespace SysManager.Tests;
 
@@ -205,7 +207,7 @@ public class StartupSignatureTests
     [InlineData("CN=Only Name", "Only Name")]
     [InlineData("cn=Lowercase Marker, C=US", "Lowercase Marker")]
     public void CommonName_TakesJustTheCommonName(string subject, string expected)
-        => Assert.Equal(expected, Helpers.SignatureVerdict.CommonName(subject));
+        => Assert.Equal(expected, SignatureVerdict.CommonName(subject));
 
     [Fact]
     public void CommonName_QuotedNameContainingAComma_IsKeptWhole()
@@ -213,7 +215,7 @@ public class StartupSignatureTests
         // "Acme, Inc." is a real shape for a company name, and splitting on the comma would render
         // "comes from Acme" — a different company.
         Assert.Equal("Acme, Inc.",
-            Helpers.SignatureVerdict.CommonName("CN=\"Acme, Inc.\", O=Acme, C=US"));
+            SignatureVerdict.CommonName("CN=\"Acme, Inc.\", O=Acme, C=US"));
     }
 
     [Theory]
@@ -221,7 +223,7 @@ public class StartupSignatureTests
     [InlineData("   ", "")]
     [InlineData("O=No Common Name Here", "O=No Common Name Here")]
     public void CommonName_WithoutAUsableCn_FallsBackWithoutInventing(string subject, string expected)
-        => Assert.Equal(expected, Helpers.SignatureVerdict.CommonName(subject));
+        => Assert.Equal(expected, SignatureVerdict.CommonName(subject));
 
     // ── The palette: what the user reads, and how loudly ──
 

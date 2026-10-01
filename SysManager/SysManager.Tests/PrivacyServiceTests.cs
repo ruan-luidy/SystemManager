@@ -3,8 +3,8 @@
 // License: MIT
 
 using Microsoft.Win32;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

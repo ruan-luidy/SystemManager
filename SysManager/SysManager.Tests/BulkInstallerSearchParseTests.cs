@@ -3,7 +3,8 @@
 // License: MIT
 
 using System.Text;
-using SysManager.ViewModels;
+using SysManager.Features.BulkInstaller;
+using SysManager.Shared.Helpers;
 
 namespace SysManager.Tests;
 

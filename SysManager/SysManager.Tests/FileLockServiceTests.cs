@@ -6,7 +6,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
-using SysManager.Services;
+using SysManager.Features.FileLock;
+using SysManager.Features.FileLock.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

@@ -8,7 +8,8 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
-using SysManager.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -325,11 +326,7 @@ public sealed class ActivityLogServiceTests : IDisposable
     /// </summary>
     private static string ViewModelSource(string name)
     {
-        var dir = new DirectoryInfo(Path.GetDirectoryName(typeof(ActivityLogService).Assembly.Location)!);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "ViewModels")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        return Path.Combine(dir!.FullName, "SysManager", "ViewModels", name + ".cs");
+        return TestPaths.AppPath("ViewModels", name + ".cs");
     }
 
     [Theory]
@@ -379,12 +376,8 @@ public sealed class ActivityLogServiceTests : IDisposable
     {
         // Tab opens are recorded in Serilog instead. If this ever comes back, the 20-entry-eviction
         // problem comes back with it and the destructive entries added here get buried again.
-        var dir = new DirectoryInfo(Path.GetDirectoryName(typeof(ActivityLogService).Assembly.Location)!);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "ViewModels")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
         var source = File.ReadAllText(
-            Path.Combine(dir!.FullName, "SysManager", "ViewModels", "MainWindowViewModel.cs"));
+            TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs"));
 
         Assert.DoesNotContain("Log(\"Opened\"", source);
     }

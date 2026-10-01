@@ -3,9 +3,10 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.LegacyPanels;
+using SysManager.Features.LegacyPanels.Models;
+using SysManager.Features.LegacyPanels.Services;
+using SysManager.Shared.Helpers;
 
 namespace SysManager.Tests;
 
@@ -96,8 +97,7 @@ public class LegacyPanelServiceTests
         // Source text because the alternative is starting Control Panel from a unit test. Matches the code
         // shape rather than a comment, and asserts the un-resolved form is gone, so deleting the call cannot
         // leave this green.
-        var source = File.ReadAllText(Path.Combine(
-            TestPaths.RepoRoot(), "SysManager", "SysManager", "Services", "LegacyPanelService.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("Services", "LegacyPanelService.cs"));
 
         Assert.Contains("FileName = SystemPaths.ResolveSystemTool(panel.FileName),", source);
         Assert.DoesNotContain("FileName = panel.FileName,", source);

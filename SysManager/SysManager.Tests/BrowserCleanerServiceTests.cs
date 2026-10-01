@@ -3,7 +3,8 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -167,7 +168,7 @@ public sealed class BrowserCleanerServiceTests : IDisposable
 
         // Force the item through Clean directly (bypassing scan-time filtering) to prove
         // the deletion path itself refuses to follow the junction.
-        var item = new Models.BrowserCleanupItem
+        var item = new BrowserCleanupItem
         {
             Browser = "Google Chrome",
             Category = "Cache",
@@ -754,7 +755,7 @@ public sealed class BrowserCleanerServiceTests : IDisposable
         // object initialiser, before the item reaches the collection — which is exactly why it needs pinning
         // rather than leaving to be noticed: the field is declared mutable and observable, so the first code
         // to recompute a size in place would display a stale one with nothing failing.
-        var item = new Models.BrowserCleanupItem
+        var item = new BrowserCleanupItem
         {
             Browser = "Chrome",
             Category = "Cache",

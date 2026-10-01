@@ -4,7 +4,7 @@
 
 using System.IO;
 using System.Net.Http;
-using SysManager.ViewModels;
+using SysManager.Shared;
 
 namespace SysManager.Tests;
 

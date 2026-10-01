@@ -4,7 +4,7 @@
 
 using System.Globalization;
 using System.Windows.Data;
-using SysManager.Helpers;
+using SysManager.Shared.Helpers;
 
 namespace SysManager.Tests;
 

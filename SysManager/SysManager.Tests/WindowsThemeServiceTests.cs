@@ -3,8 +3,8 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

@@ -8,7 +8,25 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using NetArchTest.Rules;
-using SysManager.Services;
+using SysManager.Features.About;
+using SysManager.Features.AppAlerts;
+using SysManager.Features.BandwidthMonitor;
+using SysManager.Features.CliInterface;
+using SysManager.Features.CliInterface.Services;
+using SysManager.Features.DeepCleanup;
+using SysManager.Features.DuplicateFile;
+using SysManager.Features.DuplicateFile.Services;
+using SysManager.Features.LargeFiles;
+using SysManager.Features.LargeFiles.Services;
+using SysManager.Features.ProcessManager;
+using SysManager.Features.Startup;
+using SysManager.Features.TaskScheduler;
+using SysManager.Features.Uninstaller;
+using SysManager.Shared.Controls;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
+using SysManager.Shell;
 
 namespace SysManager.Tests;
 
@@ -24,28 +42,59 @@ public partial class ArchitectureTests
     // Any public type from the app assembly anchors NetArchTest to SysManager.dll.
     private static Assembly AppAssembly => typeof(WingetService).Assembly;
 
-    private static void AssertNoDependency(string fromNamespace, string onNamespace, string? exceptType = null)
+    /// <summary>The layer a type belongs to: Services, Models, Helpers, ViewModels or Views; null for the app root.</summary>
+    /// <remarks>
+    /// The app is organised by feature, so a layer is no longer one namespace. Services, models and helpers keep it
+    /// as their LAST segment, whether shared (<c>SysManager.Shared.Services</c>) or a page's own
+    /// (<c>SysManager.Features.About.Services</c>). A page's view and view model sit together in the feature's
+    /// namespace — as do the shell's and the shared controls' — and the view is the one that is a FrameworkElement.
+    /// <c>MainWindow</c> stays out, as it did when it lived in the root namespace beside <c>App</c>.
+    /// </remarks>
+    internal static string? LayerOf(Type type)
     {
-        var predicate = Types.InAssembly(AppAssembly).That().ResideInNamespace(fromNamespace);
-        if (exceptType is not null)
-            predicate = predicate.And().DoNotHaveName(exceptType);
+        var ns = type.Namespace ?? string.Empty;
+        foreach (var layer in (string[])["Services", "Models", "Helpers"])
+        {
+            if (ns.EndsWith("." + layer, StringComparison.Ordinal)) return layer;
+        }
 
-        var result = predicate.ShouldNot().HaveDependencyOn(onNamespace).GetResult();
+        if (!PresentationNamespace.IsMatch(ns) || type.Name == "MainWindow") return null;
+        return typeof(System.Windows.FrameworkElement).IsAssignableFrom(type) ? "Views" : "ViewModels";
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex PresentationNamespace =
+        new(@"^SysManager\.(Features\.\w+|Shell|Shared|Shared\.Controls)$");
+
+    /// <summary>The app's top-level types in <paramref name="layer"/>.</summary>
+    internal static IEnumerable<Type> LayerTypes(string layer) =>
+        AppAssembly.GetTypes().Where(t => !t.IsNested && LayerOf(t) == layer);
+
+    private static void AssertNoDependency(string fromLayer, string onLayer, string? exceptType = null)
+    {
+        var from = LayerTypes(fromLayer).Where(t => t.Name != exceptType).Select(t => t.FullName!).ToArray();
+        var on = LayerTypes(onLayer).Select(t => t.FullName!).ToArray();
+        Assert.NotEmpty(from);   // else the rule below would hold over nothing
+        Assert.NotEmpty(on);
+
+        var result = Types.InAssembly(AppAssembly)
+            .That().HaveNameMatching(@"^(" + string.Join("|", from.Select(n => System.Text.RegularExpressions.Regex.Escape(n.Split('.')[^1]))) + @")$")
+            .And().ResideInNamespaceMatching(@"^SysManager(\.|$)")
+            .ShouldNot().HaveDependencyOnAny(on).GetResult();
 
         var offenders = result.FailingTypes is null
             ? string.Empty
-            : string.Join(", ", result.FailingTypes.Select(t => t.FullName));
-        Assert.True(result.IsSuccessful,
-            $"{fromNamespace} must not depend on {onNamespace}. Offending types: {offenders}");
+            : string.Join(", ", result.FailingTypes.Where(t => from.Contains(t.FullName)).Select(t => t.FullName));
+        Assert.True(result.IsSuccessful || offenders.Length == 0,
+            $"{fromLayer} must not depend on {onLayer}. Offending types: {offenders}");
     }
 
     [Fact]
     public void Services_DoNotDependOn_ViewModels()
-        => AssertNoDependency("SysManager.Services", "SysManager.ViewModels");
+        => AssertNoDependency("Services", "ViewModels");
 
     [Fact]
     public void Services_DoNotDependOn_Views()
-        => AssertNoDependency("SysManager.Services", "SysManager.Views");
+        => AssertNoDependency("Services", "Views");
 
     // MainWindowViewModel is the shell / navigation view model: its nav table maps each tab
     // to its View type (typeof(Views.XView)) to drive content presentation, so it legitimately
@@ -54,14 +103,14 @@ public partial class ArchitectureTests
     // one dependency; tracked for the navigation refactor.)
     [Fact]
     public void ViewModels_DoNotDependOn_Views()
-        => AssertNoDependency("SysManager.ViewModels", "SysManager.Views", exceptType: "MainWindowViewModel");
+        => AssertNoDependency("ViewModels", "Views", exceptType: "MainWindowViewModel");
 
     [Theory]
-    [InlineData("SysManager.Services")]
-    [InlineData("SysManager.ViewModels")]
-    [InlineData("SysManager.Views")]
+    [InlineData("Services")]
+    [InlineData("ViewModels")]
+    [InlineData("Views")]
     public void Models_DoNotDependOnUpperLayers(string upperLayer)
-        => AssertNoDependency("SysManager.Models", upperLayer);
+        => AssertNoDependency("Models", upperLayer);
 
     /// <summary>
     /// No service may hold a resolved user-data path in STATIC state.
@@ -112,7 +161,7 @@ public partial class ArchitectureTests
         var found = new List<string>();
 
         foreach (var type in AppAssembly.GetTypes()
-                     .Where(t => t.Namespace == "SysManager.Services" && !t.IsNested))
+                     .Where(t => LayerOf(t) == "Services" && !t.IsNested))
         {
             foreach (var field in type.GetFields(
                          BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
@@ -222,7 +271,7 @@ public partial class ArchitectureTests
     [InlineData("new AboutViewModel(dir)", false)]
     [InlineData("new AboutViewModel(updates, report)", true)]
     [InlineData("new AboutViewModel(updates, report, dir)", false)]
-    [InlineData("new SysManager.Services.SpeedTestHistoryService()", true)]
+    [InlineData("new SysManager.Shared.Services.SpeedTestHistoryService()", true)]
     [InlineData("new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), \"a, (b\", Guid.NewGuid().ToString()))", false)]
     [InlineData("new AppIconService(null, otherDir)", false)]
     [InlineData("new PerformanceService(runner, restore)", true)]
@@ -489,7 +538,7 @@ public partial class ArchitectureTests
         // command that does not take it today may take it tomorrow. The rule is therefore conservative: a class
         // that constructs one of these view models and executes any command joins the collection.
         var lockTakers = new List<string>();
-        foreach (var vmFile in Directory.GetFiles(Path.Combine(TestPaths.AppProject(), "ViewModels"), "*ViewModel.cs"))
+        foreach (var vmFile in TestPaths.ViewModelFiles("*ViewModel.cs").ToArray())
         {
             if (WithoutComments(File.ReadAllText(vmFile)).Contains("OperationLockService.Instance.TryAcquire(", StringComparison.Ordinal))
                 lockTakers.Add(Path.GetFileNameWithoutExtension(vmFile));
@@ -567,7 +616,7 @@ public partial class ArchitectureTests
         var offenders = new List<string>();
 
         foreach (var type in AppAssembly.GetTypes()
-                     .Where(t => t.Namespace == "SysManager.Services" && !t.IsNested))
+                     .Where(t => LayerOf(t) == "Services" && !t.IsNested))
         {
             foreach (var method in type.GetMethods(
                          BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic |
@@ -637,8 +686,7 @@ public partial class ArchitectureTests
         // lines are excluded up front: `private void OpenChangelog() => …` itself contains
         // "OpenChangelog(", so a naive substring search finds every method's own signature and the whole
         // check passes vacuously — it would assert nothing at all while looking thorough.
-        var callLines = Directory
-            .GetFiles(Path.Combine(appDir, "ViewModels"), "*.cs", SearchOption.AllDirectories)
+        var callLines = TestPaths.ViewModelFiles("*.cs").ToArray()
             .SelectMany(File.ReadAllLines)
             .Select(l => l.Trim())
             .Where(l => !DeclarationLine().IsMatch(l))
@@ -648,7 +696,7 @@ public partial class ArchitectureTests
         var unreachable = new List<string>();
 
         foreach (var type in AppAssembly.GetTypes()
-                     .Where(t => t.Namespace == "SysManager.ViewModels" && !t.IsNested))
+                     .Where(t => LayerOf(t) == "ViewModels" && !t.IsNested))
         {
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
             {
@@ -703,12 +751,11 @@ public partial class ArchitectureTests
     public void EveryExportCommand_IsBoundInItsOwnView()
     {
         var appDir = TestPaths.AppProject();
-        var viewsDir = Path.Combine(appDir, "Views");
         var offenders = new List<string>();
         var checked_ = 0;
 
         foreach (var type in AppAssembly.GetTypes()
-                     .Where(t => t.Namespace == "SysManager.ViewModels" && !t.IsNested)
+                     .Where(t => LayerOf(t) == "ViewModels" && !t.IsNested)
                      .OrderBy(t => t.Name, StringComparer.Ordinal))
         {
             var command = type
@@ -717,7 +764,7 @@ public partial class ArchitectureTests
                                   && typeof(System.Windows.Input.ICommand).IsAssignableFrom(p.PropertyType));
             if (command is null) continue;
 
-            var view = Path.Combine(viewsDir,
+            var view = TestPaths.AppPath("Views",
                 type.Name.Replace("ViewModel", "View", StringComparison.Ordinal) + ".xaml");
             if (!File.Exists(view))
             {
@@ -778,8 +825,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryStatusFooter_NamesItsProgressBar_AndNobodyReInlinesIt()
     {
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
-        var control = Path.Combine(viewsDir, "StatusFooter.xaml");
+        var control = TestPaths.AppPath("Views", "StatusFooter.xaml");
         Assert.True(File.Exists(control),
             $"{control} not found — the shared footer is gone, so this guard would police nothing.");
 
@@ -787,7 +833,7 @@ public partial class ArchitectureTests
         var reInlined = new List<string>();
         var callSites = 0;
 
-        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        foreach (var file in TestPaths.ViewFiles("*.xaml").ToArray())
         {
             var markup = WithoutXamlComments(File.ReadAllText(file));
             var view = Path.GetFileName(file);
@@ -872,7 +918,7 @@ public partial class ArchitectureTests
     public void EveryThemeEntryPoint_GoesThroughTheLegibilityCorrection()
     {
         var service = File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "Services", "ThemeService.cs"));
+            TestPaths.AppPath("Services", "ThemeService.cs"));
 
         foreach (var entry in new[] { "SetPreset", "SetAccent", "SetCustom" })
         {
@@ -1013,10 +1059,9 @@ public partial class ArchitectureTests
             "StatusMessage_DefaultEmpty",
         ];
 
-        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var racingViewModels = new List<string>();
 
-        foreach (var file in Directory.GetFiles(vmDir, "*ViewModel.cs"))
+        foreach (var file in TestPaths.ViewModelFiles("*ViewModel.cs").ToArray())
         {
             var source = WithoutComments(File.ReadAllText(file));
             var entry = Regex.Match(source, @"InitializeAsync\(\s*(\w+)\s*\)");
@@ -1412,7 +1457,7 @@ public partial class ArchitectureTests
     {
         // The needle must not appear literally in this file, which is one of the files scanned.
         var skip = ElevationSelfSkip();
-        Assert.Matches(skip, "if (Helpers.AdminHelper." + "IsElevated()) return;");
+        Assert.Matches(skip, "if (AdminHelper." + "IsElevated()) return;");
         Assert.Matches(skip, "if (!vm." + "IsElevated) return;");
         Assert.DoesNotMatch(skip, "var elevated = AdminHelper." + "IsElevated();");
 
@@ -1967,9 +2012,9 @@ public partial class ArchitectureTests
     public void TheAudioRouteRead_ReportsUnknownRatherThanTheDefault()
     {
         var appDir = TestPaths.AppProject();
-        var contract = File.ReadAllText(Path.Combine(appDir, "Services", "IAudioMixerService.cs"));
-        var service = File.ReadAllText(Path.Combine(appDir, "Services", "AudioMixerService.cs"));
-        var view = File.ReadAllText(Path.Combine(appDir, "Views", "AudioMixerView.xaml"));
+        var contract = File.ReadAllText(TestPaths.AppPath("Services", "IAudioMixerService.cs"));
+        var service = File.ReadAllText(TestPaths.AppPath("Services", "AudioMixerService.cs"));
+        var view = File.ReadAllText(TestPaths.AppPath("Views", "AudioMixerView.xaml"));
 
         Assert.Contains("string? GetSessionOutputDevice", contract, StringComparison.Ordinal);
 
@@ -2014,11 +2059,10 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryGoldElevationBanner_PromisesMoreAccess()
     {
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var offenders = new List<string>();
         var banners = 0;
 
-        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        foreach (var file in TestPaths.ViewFiles("*.xaml").ToArray())
         {
             foreach (var message in GoldElevatedBannerMessages(File.ReadAllText(file)))
             {
@@ -2064,10 +2108,9 @@ public partial class ArchitectureTests
     [Fact]
     public void BothAdminBanners_ShareOneGeometry()
     {
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var seen = new List<(string View, string State, string Geometry)>();
 
-        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        foreach (var file in TestPaths.ViewFiles("*.xaml").ToArray())
         {
             XDocument doc;
             try { doc = XDocument.Parse(File.ReadAllText(file)); }
@@ -2131,11 +2174,10 @@ public partial class ArchitectureTests
     [Fact]
     public void NoTextWrapping_IsInertInsideAHorizontalStackPanel()
     {
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var offenders = new List<string>();
         var scanned = 0;
 
-        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        foreach (var file in TestPaths.ViewFiles("*.xaml").ToArray())
         {
             System.Xml.Linq.XDocument doc;
             try { doc = System.Xml.Linq.XDocument.Load(file); }
@@ -2288,8 +2330,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryViewModelWithAnIsActiveFlag_IsHandledBySetActive()
     {
-        var source = File.ReadAllText(Path.Combine(
-            TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs"));
 
         // Only the SetActive body counts. Searching the whole file would let an unrelated mention of a
         // view model's name pass the check — the same cross-type pooling trap the command-reachability
@@ -2300,9 +2341,9 @@ public partial class ArchitectureTests
         Assert.True(end > start, "Could not delimit the SetActive body.");
         var body = source[start..end];
 
-        var gated = typeof(SysManager.ViewModels.MainWindowViewModel).Assembly
+        var gated = typeof(SysManager.Shell.MainWindowViewModel).Assembly
             .GetTypes()
-            .Where(t => t.Namespace == "SysManager.ViewModels"
+            .Where(t => LayerOf(t) == "ViewModels"
                      && t.Name.EndsWith("ViewModel", StringComparison.Ordinal)
                      && t.GetProperty("IsActive") is not null)
             // Row-level view models are not tabs, so the shell never navigates to them.
@@ -2345,7 +2386,7 @@ public partial class ArchitectureTests
     [Fact]
     public void ClosingTheWindowToExit_RequestsAnApplicationShutdown()
     {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("MainWindow.xaml.cs"));
 
         var start = source.IndexOf("protected override void OnClosing(", StringComparison.Ordinal);
         Assert.True(start >= 0, "OnClosing not found — this check is not reading what it thinks it is.");
@@ -2387,11 +2428,10 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryDisposedCancellationSource_IsCancelledFirst()
     {
-        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var offenders = new List<string>();
         var checkedFields = 0;
 
-        foreach (var file in Directory.GetFiles(vmDir, "*.cs"))
+        foreach (var file in TestPaths.ViewModelFiles("*.cs").ToArray())
         {
             var source = File.ReadAllText(file);
 
@@ -2479,8 +2519,8 @@ public partial class ArchitectureTests
         var offenders = new List<string>();
         var checkedTypes = 0;
 
-        foreach (var file in Directory.GetFiles(Path.Combine(appDir, "Services"), "*.cs")
-                     .Concat(Directory.GetFiles(Path.Combine(appDir, "ViewModels"), "*.cs")))
+        foreach (var file in TestPaths.LayerFiles("Services", "*.cs").ToArray()
+                     .Concat(TestPaths.ViewModelFiles("*.cs").ToArray()))
         {
             var source = File.ReadAllText(file);
 
@@ -2550,7 +2590,7 @@ public partial class ArchitectureTests
         Assert.True(deepLinks >= 3,
             $"expected the Q&A deep link on all three doc surfaces, found {deepLinks} — the guard has gone vacuous");
         Assert.Equal($"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/discussions/categories/q-a",
-            SysManager.ViewModels.AboutViewModel.QuestionsUrl);
+            SysManager.Features.About.AboutViewModel.QuestionsUrl);
 
         Assert.True(offenders.Count == 0,
             "these support routes still point at the Discussions root instead of /discussions/categories/q-a:\n  "
@@ -2631,8 +2671,7 @@ public partial class ArchitectureTests
                 "an embedded resource read through GetManifestResourceStream — shipped data, never written",
         };
 
-        var services = Path.Combine(TestPaths.AppProject(), "Services");
-        var catalog = File.ReadAllText(Path.Combine(services, "ProfileService.cs"));
+        var catalog = File.ReadAllText(TestPaths.AppPath("Services", "ProfileService.cs"));
         var carried = JsonStateFile().Matches(catalog).Cast<Match>()
             .Select(m => m.Groups[1].Value)
             .ToHashSet(StringComparer.Ordinal);
@@ -2658,7 +2697,7 @@ public partial class ArchitectureTests
         var unclassified = new List<string>();
         var literals = 0;
 
-        foreach (var path in Directory.EnumerateFiles(services, "*.cs")
+        foreach (var path in TestPaths.LayerFiles("Services", "*.cs")
                      .OrderBy(p => p, StringComparer.Ordinal))
         {
             // Comment lines dropped: several services name a sibling's file in prose to explain a
@@ -2725,7 +2764,7 @@ public partial class ArchitectureTests
         var offenders = new List<string>();
         var pairs = 0;
 
-        foreach (var view in Directory.EnumerateFiles(Path.Combine(app, "Views"), "*.xaml")
+        foreach (var view in TestPaths.ViewFiles("*.xaml")
                      .OrderBy(p => p, StringComparer.Ordinal))
         {
             var document = XDocument.Load(view);
@@ -2743,7 +2782,7 @@ public partial class ArchitectureTests
                 pairs++;
 
                 var viewName = Path.GetFileNameWithoutExtension(view);
-                var vmPath = Path.Combine(app, "ViewModels", viewName + "Model.cs");
+                var vmPath = TestPaths.AppPath("ViewModels", viewName + "Model.cs");
                 if (!File.Exists(vmPath))
                 {
                     offenders.Add($"{viewName}.xaml binds {commandName} but {viewName}Model.cs does not exist");
@@ -2830,7 +2869,7 @@ public partial class ArchitectureTests
         var offenders = new List<string>();
         var wired = 0;
 
-        foreach (var view in Directory.EnumerateFiles(Path.Combine(app, "Views"), "*.xaml")
+        foreach (var view in TestPaths.ViewFiles("*.xaml")
                      .OrderBy(p => p, StringComparer.Ordinal))
         {
             // Comments stripped: several views discuss a command in prose, and a match there would invent
@@ -2868,7 +2907,7 @@ public partial class ArchitectureTests
                 continue;
             }
 
-            var vmPath = Path.Combine(app, "ViewModels", viewName + "Model.cs");
+            var vmPath = TestPaths.AppPath("ViewModels", viewName + "Model.cs");
             if (!File.Exists(vmPath))
             {
                 offenders.Add($"{viewName}.xaml binds {command} but {viewName}Model.cs does not exist");
@@ -2914,7 +2953,7 @@ public partial class ArchitectureTests
         // guard clause that admits the keypress at all, and once in the CanExecute check below it. Removing
         // F5 from the first left the second in place, so a check for the bare name stayed GREEN with the
         // whole feature switched off — measured by mutating exactly that.
-        var shell = File.ReadAllText(Path.Combine(app, "MainWindow.xaml.cs"));
+        var shell = File.ReadAllText(TestPaths.AppPath("MainWindow.xaml.cs"));
         Assert.Contains("Key.Escape or Key.F5", shell, StringComparison.Ordinal);
         Assert.Contains("AcceleratorCommand(vm.SelectedNav, e.Key)", shell, StringComparison.Ordinal);
     }
@@ -2956,7 +2995,7 @@ public partial class ArchitectureTests
         var offenders = new List<string>();
         var boxes = 0;
 
-        foreach (var view in Directory.EnumerateFiles(Path.Combine(app, "Views"), "*.xaml")
+        foreach (var view in TestPaths.ViewFiles("*.xaml")
                      .OrderBy(p => p, StringComparer.Ordinal))
         {
             foreach (var element in XDocument.Load(view).Descendants(presentation + "TextBox"))
@@ -2998,7 +3037,7 @@ public partial class ArchitectureTests
             + $"\n({boxes} boxes checked)");
 
         // And the shell must actually do the lookup.
-        var shell = File.ReadAllText(Path.Combine(app, "MainWindow.xaml.cs"));
+        var shell = File.ReadAllText(TestPaths.AppPath("MainWindow.xaml.cs"));
         Assert.Contains("Key.F && Keyboard.Modifiers is ModifierKeys.Control", shell, StringComparison.Ordinal);
         Assert.Contains("FilterBoxes.FindIn(ContentHost)", shell, StringComparison.Ordinal);
     }
@@ -3010,7 +3049,7 @@ public partial class ArchitectureTests
     /// </remarks>
     private static HashSet<string> FilterBoxNames(string appDir)
     {
-        var source = File.ReadAllText(Path.Combine(appDir, "Helpers", "FilterBoxes.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("Helpers", "FilterBoxes.cs"));
         var at = source.IndexOf("BindingPaths = [", StringComparison.Ordinal);
         Assert.True(at >= 0, "FilterBoxes.BindingPaths not found — this guard would compare against nothing");
 
@@ -3129,8 +3168,8 @@ public partial class ArchitectureTests
     public void EverySearchableField_IsVisibleInItsView()
     {
         var appDir = TestPaths.AppProject();
-        var source = File.ReadAllText(Path.Combine(appDir, "ViewModels", "ProcessManagerViewModel.cs"));
-        var xaml = File.ReadAllText(Path.Combine(appDir, "Views", "ProcessManagerView.xaml"));
+        var source = File.ReadAllText(TestPaths.AppPath("ViewModels", "ProcessManagerViewModel.cs"));
+        var xaml = File.ReadAllText(TestPaths.AppPath("Views", "ProcessManagerView.xaml"));
 
         // The filter enumerates its fields in one span; read them from there rather than restating them,
         // so adding a fourth searchable field is covered automatically.
@@ -3187,7 +3226,6 @@ public partial class ArchitectureTests
     {
         var destructive = DestructiveControls;
         var appDir = TestPaths.AppProject();
-        var viewsDir = Path.Combine(appDir, "Views");
         var offenders = new List<string>();
         var checkedButtons = 0;
         var checkedControls = 0;
@@ -3205,7 +3243,7 @@ public partial class ArchitectureTests
 
         foreach (var (command, view, styles) in destructive)
         {
-            var path = Path.Combine(viewsDir, view);
+            var path = TestPaths.AppPath("Views", view);
             Assert.True(File.Exists(path), $"{path} not found — this guard would pass vacuously");
 
             var xaml = XamlCode(path);
@@ -3367,14 +3405,13 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryImmediatelyDestructiveButton_ExplainsWhatItWillDo()
     {
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var offenders = new List<string>();
         var checkedButtons = 0;
         var checkedControls = 0;
 
         foreach (var (command, view, _) in DestructiveControls)
         {
-            var path = Path.Combine(viewsDir, view);
+            var path = TestPaths.AppPath("Views", view);
             Assert.True(File.Exists(path), $"{path} not found — this guard would pass vacuously");
 
             var xaml = XamlCode(path);
@@ -3512,8 +3549,7 @@ public partial class ArchitectureTests
                 + "outside this guard, which asks about DataGrid and ItemsControl.)",
         };
 
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
-        var files = Directory.GetFiles(viewsDir, "*.xaml");
+        var files = TestPaths.ViewFiles("*.xaml").ToArray();
         Assert.True(files.Length >= 25,
             $"only {files.Length} views enumerated — this guard is reading the wrong folder");
 
@@ -3580,8 +3616,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoViewHandRollsAnEmptyStateTheSharedControlAlreadyProvides()
     {
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
-        var files = Directory.GetFiles(viewsDir, "*.xaml");
+        var files = TestPaths.ViewFiles("*.xaml").ToArray();
 
         var offenders = new List<string>();
         var listing = 0;
@@ -3668,12 +3703,12 @@ public partial class ArchitectureTests
         // (file, method, flag, how many assignments the method must contain, why that number)
         (string File, string Method, string Flag, int Assignments, string Why)[] wiring =
         [
-            ("ViewModels/AboutViewModel.cs", "LoadHistoryAsync", "HistoryUnavailable", 3,
+            ("Features/About/AboutViewModel.cs", "LoadHistoryAsync", "HistoryUnavailable", 3,
              "the success path plus BOTH catch blocks — a missed catch leaves the section silent on the "
              + "failure it exists to explain"),
-            ("ViewModels/DashboardViewModel.cs", "LoadHealthScoreAsync", "HealthHasNothingToImprove", 1,
+            ("Features/Dashboard/DashboardViewModel.cs", "LoadHealthScoreAsync", "HealthHasNothingToImprove", 1,
              "set beside HasHealthScore, so the good-news line and the score appear together"),
-            ("ViewModels/DashboardViewModel.cs", "RefreshTemperaturesAsync", "TemperaturesUnavailable", 1,
+            ("Features/Dashboard/DashboardViewModel.cs", "RefreshTemperaturesAsync", "TemperaturesUnavailable", 1,
              "set once per read, and OUTSIDE the dispatcher hop — inside it the assignment is skipped "
              + "whenever Application.Current is null, which is every unit test"),
         ];
@@ -3756,8 +3791,6 @@ public partial class ArchitectureTests
     public void TheElevationBanner_LivesInOneControl_AndItsHostsExposeWhatItBinds()
     {
         var appDir = TestPaths.AppProject();
-        var viewsDir = Path.Combine(appDir, "Views");
-        var viewModelsDir = Path.Combine(appDir, "ViewModels");
 
         var handRolled = Directory
             .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
@@ -3778,7 +3811,7 @@ public partial class ArchitectureTests
         // trusting that having extracted it was enough. Its "Run as administrator" button is the elevation
         // control on every privileged tab: without HelpText a screen-reader user is told the button's name on
         // thirty pages and never that pressing it closes SysManager and opens it again elevated.
-        var banner = XamlCode(Path.Combine(viewsDir, "AdminBanner.xaml"));
+        var banner = XamlCode(TestPaths.AppPath("Views", "AdminBanner.xaml"));
         var unreadable = ReadButtonElement(banner, "AdminBanner.xaml", "RelaunchAsAdminCommand", out var button);
         Assert.True(unreadable is null, unreadable);
 
@@ -3786,8 +3819,7 @@ public partial class ArchitectureTests
         Assert.True(bannerHelp is null,
             bannerHelp + ". Every privileged tab renders this one control, so the gap is on all of them.");
 
-        var hosts = Directory
-            .EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly)
+        var hosts = TestPaths.ViewFiles("*.xaml")
             .Where(f => Path.GetFileName(f) != "AdminBanner.xaml")
             .Where(f => File.ReadAllText(f).Contains("<v:AdminBanner", StringComparison.Ordinal))
             .Select(f => Path.GetFileNameWithoutExtension(f) ?? "")
@@ -3805,7 +3837,7 @@ public partial class ArchitectureTests
         foreach (var host in hosts)
         {
             // ServicesView -> ServicesViewModel. A host whose name does not map is itself a finding.
-            var viewModel = Path.Combine(viewModelsDir,
+            var viewModel = TestPaths.AppPath("ViewModels",
                 host.EndsWith("View", StringComparison.Ordinal) ? host + "Model.cs" : host + "ViewModel.cs");
             if (!File.Exists(viewModel))
             {
@@ -3864,12 +3896,11 @@ public partial class ArchitectureTests
             [@"Margin=""28,16,28,28"""] = "a final content card, which carries the gap in place of a status row",
         };
 
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var perSection = new List<string>();
         var offenders = new List<string>();
         var gutterViews = 0;
 
-        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        foreach (var file in TestPaths.ViewFiles("*.xaml").ToArray())
         {
             var xaml = XamlCode(file);
             var gutters = SideGutter().Matches(xaml);
@@ -3933,13 +3964,12 @@ public partial class ArchitectureTests
             ("ScheduledMaintenanceView.xaml", "{Binding Actions}", "MaintenanceActionText"),
         };
 
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var app = XamlCode(Path.Combine(TestPaths.AppProject(), "App.xaml"));
         var offenders = new List<string>();
 
         foreach (var (view, itemsSource, converterKey) in pickers)
         {
-            var xaml = XamlCode(Path.Combine(viewsDir, view));
+            var xaml = XamlCode(TestPaths.AppPath("Views", view));
 
             var at = xaml.IndexOf($@"ItemsSource=""{itemsSource}""", StringComparison.Ordinal);
             if (at < 0)
@@ -4058,8 +4088,8 @@ public partial class ArchitectureTests
         // The handlers themselves: both keys, not just Enter.
         foreach (var (source, handler) in new[]
                  {
-                     (Path.Combine(appDir, "MainWindow.xaml.cs"), "ThemeBtn_KeyDown"),
-                     (Path.Combine(appDir, "Views", "ThemePopup.xaml.cs"), "Preset_KeyDown"),
+                     (TestPaths.AppPath("MainWindow.xaml.cs"), "ThemeBtn_KeyDown"),
+                     (TestPaths.AppPath("Views", "ThemePopup.xaml.cs"), "Preset_KeyDown"),
                  })
         {
             Assert.True(File.Exists(source),
@@ -4258,7 +4288,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EverySidebarTab_HasASmokeRow()
     {
-        var shell = Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs");
+        var shell = TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs");
         var smoke = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager.UITests", "AllTabsSmokeUiTests.cs");
 
         Assert.True(File.Exists(shell), $"{shell} not found — this guard would compare nothing.");
@@ -4316,7 +4346,7 @@ public partial class ArchitectureTests
     /// <para><b>It is compared against the view's <c>Display</c> header ALONE, and the first version of this
     /// guard proved why.</b> Written against the view's whole renderable text it stayed GREEN on the very
     /// defect it was written for: <c>DebloaterView.xaml</c> still contains the word "Debloater" in
-    /// <c>x:Class="SysManager.Views.DebloaterView"</c> and in its designer <c>DataContext</c>, so a row
+    /// <c>x:Class="SysManager.Features.Debloater.DebloaterView"</c> and in its designer <c>DataContext</c>, so a row
     /// waiting for "Debloater" matched markup rather than copy. That is the same corpus-too-wide mistake the
     /// older copy guard made with <c>///</c> comments, arriving from a new direction — a type name is not
     /// something a user can read. All 59 tab views carry exactly one literal <c>Display</c> header and none is
@@ -4327,7 +4357,7 @@ public partial class ArchitectureTests
     {
         var appDir = TestPaths.AppProject();
         var shell = WithoutComments(
-            File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")));
+            File.ReadAllText(TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs")));
         var smokePath = Path.Combine(
             TestPaths.RepoRoot(), "SysManager", "SysManager.UITests", "AllTabsSmokeUiTests.cs");
         Assert.True(File.Exists(smokePath), $"{smokePath} not found — this guard would compare nothing.");
@@ -4358,7 +4388,7 @@ public partial class ArchitectureTests
                 continue;
             }
 
-            var viewPath = Path.Combine(appDir, "Views", view + ".xaml");
+            var viewPath = TestPaths.AppPath("Views", view + ".xaml");
             if (!File.Exists(viewPath))
             {
                 offenders.Add($"{id} opens {view}, and Views/{view}.xaml does not exist");
@@ -4424,7 +4454,7 @@ public partial class ArchitectureTests
 
     /// <summary>A nav row, capturing its id and the view type it opens.</summary>
     [GeneratedRegex(@"(?:Tab<\w+>|EagerItem)\(\s*""(?<id>nav-[a-z0-9-]+)""\s*,\s*""[^""]*""\s*,\s*"
-                    + @"typeof\(Views\.(?<view>\w+)\)", RegexOptions.Compiled)]
+                    + @"typeof\((?<view>\w+)\)", RegexOptions.Compiled)]
     private static partial Regex NavRowWithView();
 
     /// <summary>One row of the navigation smoke table: <c>new object[] { "nav-x", "Header" }</c>.</summary>
@@ -4490,8 +4520,8 @@ public partial class ArchitectureTests
         var offenders = new List<string>();
         var uses = 0;
 
-        foreach (var file in Directory.GetFiles(Path.Combine(appDir, "Views"), "*.xaml")
-                     .Concat([Path.Combine(appDir, "MainWindow.xaml")]))
+        foreach (var file in TestPaths.ViewFiles("*.xaml").ToArray()
+                     .Concat([TestPaths.AppPath("MainWindow.xaml")]))
         {
             var markup = WithoutXamlComments(File.ReadAllText(file));
             var view = Path.GetFileName(file);
@@ -4673,12 +4703,11 @@ public partial class ArchitectureTests
             ("EnvironmentVariablesView.xaml", "Binding HasNoMatches", "No variables match your search"),
         ];
 
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var offenders = new List<string>();
 
         foreach (var (view, binding, copy) in expected)
         {
-            var path = Path.Combine(viewsDir, view);
+            var path = TestPaths.AppPath("Views", view);
             Assert.True(File.Exists(path), $"{path} not found — this guard would pass vacuously");
 
             var xaml = File.ReadAllText(path);
@@ -4718,8 +4747,8 @@ public partial class ArchitectureTests
     public void EveryFieldTheChkdskPickerFillsIn_IsShownInItsRow()
     {
         var appDir = TestPaths.AppProject();
-        var source = File.ReadAllText(Path.Combine(appDir, "ViewModels", "SystemHealthViewModel.cs"));
-        var xaml = ChkdskRowTemplate(File.ReadAllText(Path.Combine(appDir, "Views", "SystemHealthView.xaml")));
+        var source = File.ReadAllText(TestPaths.AppPath("ViewModels", "SystemHealthViewModel.cs"));
+        var xaml = ChkdskRowTemplate(File.ReadAllText(TestPaths.AppPath("Views", "SystemHealthView.xaml")));
 
         var initialiser = DriveTargetInitialiser().Match(source);
         Assert.True(initialiser.Success,
@@ -5102,7 +5131,7 @@ public partial class ArchitectureTests
     public void NoPublicDocument_ClaimsAPublisherPinThatIsNotArmed()
     {
         var root = TestPaths.RepoRoot();
-        var pinIsArmed = SysManager.Services.UpdateService.ExpectedSignerSubject.Length > 0;
+        var pinIsArmed = SysManager.Shared.Services.UpdateService.ExpectedSignerSubject.Length > 0;
 
         string[] surfaces = ["README.md", "SECURITY.md"];
         var offenders = new List<string>();
@@ -5197,7 +5226,6 @@ public partial class ArchitectureTests
     public void EveryModelProperty_IsEitherWrittenOrShown()
     {
         var appDir = TestPaths.AppProject();
-        var modelsDir = Path.Combine(appDir, "Models");
 
         // Comments stripped: a comment that merely NAMES a property would otherwise credit it as bound,
         // and this codebase comments heavily enough that the risk is real rather than theoretical.
@@ -5214,7 +5242,7 @@ public partial class ArchitectureTests
         var dead = new List<string>();
         var checkedProperties = 0;
 
-        foreach (var (path, source) in sources.Where(kv => kv.Key.StartsWith(modelsDir, StringComparison.Ordinal)))
+        foreach (var (path, source) in sources.Where(kv => TestPaths.IsLayerFile(kv.Key, "Models")))
         {
             var typeName = TypeDeclaration().Match(source).Groups[1].Value;
             if (typeName.Length == 0) continue;
@@ -5293,7 +5321,6 @@ public partial class ArchitectureTests
     public void EveryModelProperty_IsBoundOrRead()
     {
         var appDir = TestPaths.AppProject();
-        var modelsDir = Path.Combine(appDir, "Models") + Path.DirectorySeparatorChar;
 
         var xaml = XmlComment().Replace(string.Join('\n', Directory
             .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
@@ -5308,7 +5335,7 @@ public partial class ArchitectureTests
         var dead = new List<string>();
         var inspected = 0;
 
-        foreach (var (path, source) in sources.Where(kv => kv.Key.StartsWith(modelsDir, StringComparison.Ordinal)))
+        foreach (var (path, source) in sources.Where(kv => TestPaths.IsLayerFile(kv.Key, "Models")))
         {
             var typeName = TypeDeclaration().Match(source).Groups[1].Value;
             if (typeName.Length == 0) continue;
@@ -5391,7 +5418,6 @@ public partial class ArchitectureTests
     public void EveryViewModelProperty_IsShownOrRead()
     {
         var appDir = TestPaths.AppProject();
-        var viewModelsDir = Path.Combine(appDir, "ViewModels");
 
         // Comments stripped: a comment that merely NAMES a property would otherwise credit it as bound,
         // and this codebase comments heavily enough that the risk is real rather than theoretical.
@@ -5408,7 +5434,7 @@ public partial class ArchitectureTests
         var unreachable = new List<string>();
         var inspected = 0;
 
-        foreach (var (path, source) in sources.Where(kv => kv.Key.StartsWith(viewModelsDir, StringComparison.Ordinal)))
+        foreach (var (path, source) in sources.Where(kv => TestPaths.IsViewModelFile(kv.Key)))
         {
             var typeName = TypeDeclaration().Match(source).Groups[1].Value;
 
@@ -5647,11 +5673,10 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryComputedModelProperty_IsNotifiedByItsDependency()
     {
-        var modelsDir = Path.Combine(TestPaths.AppProject(), "Models");
         var offenders = new List<string>();
         var pairs = 0;
 
-        foreach (var path in Directory.EnumerateFiles(modelsDir, "*.cs", SearchOption.TopDirectoryOnly))
+        foreach (var path in TestPaths.LayerFiles("Models", "*.cs"))
         {
             var source = WithoutComments(File.ReadAllText(path));
             var model = Path.GetFileName(path);
@@ -5837,7 +5862,6 @@ public partial class ArchitectureTests
     public void EveryReadmeTabCount_MatchesTheSource()
     {
         var appDir = TestPaths.AppProject();
-        var viewsDir = Path.Combine(appDir, "Views");
 
         var tabs = SidebarTabLabels().Count;
         Assert.True(tabs >= 50, $"only {tabs} tab labels were parsed — the count to compare against is wrong");
@@ -5846,7 +5870,7 @@ public partial class ArchitectureTests
         // <v:StatusFooter/>, which renders that same line from its own file. Comments stripped, because
         // DiskAnalyzerView explains in prose why it is NOT using the shared footer (#2274) and a text scan
         // counts that mention as a call site.
-        var statusLines = Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly)
+        var statusLines = TestPaths.ViewFiles("*.xaml")
             .Select(f => WithoutXamlComments(File.ReadAllText(f)))
             .Sum(markup =>
                 CountOccurrences(markup, "Text=\"{Binding StatusMessage}\"")
@@ -5859,7 +5883,7 @@ public partial class ArchitectureTests
         // The accelerator subsets, each from the source that defines it rather than from a second list.
         var escapeTabs = ViewModelsOverriding("EscapeCancel");
         var refreshTabs = ViewModelsOverriding("RefreshOnF5");
-        var filterTabs = ViewsWithAFilterBoxCtrlFRecognises(viewsDir);
+        var filterTabs = ViewsWithAFilterBoxCtrlFRecognises();
 
         Assert.True(escapeTabs >= 15 && refreshTabs >= 38 && filterTabs >= 11,
             $"the accelerator counts to compare against look wrong ({escapeTabs} Escape, {refreshTabs} F5, "
@@ -5945,7 +5969,7 @@ public partial class ArchitectureTests
         var appDir = TestPaths.AppProject();
         var repoRoot = TestPaths.RepoRoot();
         var nav = WithoutComments(
-            File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")));
+            File.ReadAllText(TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs")));
 
         // Each Group(...) call and the leaves that belong to it, by slicing between successive calls.
         var slices = NavGroupSplit().Split(nav).Skip(1).ToList();
@@ -5962,8 +5986,7 @@ public partial class ArchitectureTests
         // Views embedding the shared elevation banner. The banner is one control now, so this counts the call
         // sites and not a copied Border — and Uninstaller is correctly absent: elevation REMOVES capability
         // there, so its hand-rolled neutral banner is not a "page needing elevation".
-        var elevated = Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml",
-                                                SearchOption.TopDirectoryOnly)
+        var elevated = TestPaths.ViewFiles("*.xaml")
             .Count(f => AdminBannerElement().IsMatch(WithoutXamlComments(File.ReadAllText(f))));
 
         Assert.True(elevated >= 25,
@@ -6032,7 +6055,7 @@ public partial class ArchitectureTests
     public void EveryReadmeGroupRow_ListsExactlyItsGroupsTabs()
     {
         var nav = WithoutComments(
-            File.ReadAllText(Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs")));
+            File.ReadAllText(TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs")));
 
         // group label -> its leaf labels, sliced between successive Group( calls.
         var source = new Dictionary<string, List<string>>(StringComparer.Ordinal);
@@ -6331,24 +6354,23 @@ public partial class ArchitectureTests
     /// </summary>
     private static int ViewModelsOverriding(string property)
     {
-        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var declaration = $"override IRelayCommand? {property}";
-        return Directory.EnumerateFiles(vmDir, "*ViewModel.cs", SearchOption.TopDirectoryOnly)
+        return TestPaths.ViewModelFiles("*ViewModel.cs")
             .Count(f => WithoutComments(File.ReadAllText(f))
                 .Contains(declaration, StringComparison.Ordinal));
     }
 
     /// <summary>
     /// How many views hold a <c>TextBox</c> whose <c>Text</c> binds one of the names <c>Ctrl+F</c> looks
-    /// for. Reads the names from <c>Helpers.FilterBoxes.BindingPaths</c> rather than restating them, so the
+    /// for. Reads the names from <c>FilterBoxes.BindingPaths</c> rather than restating them, so the
     /// shortcut and this count cannot disagree.
     /// </summary>
-    private static int ViewsWithAFilterBoxCtrlFRecognises(string viewsDir)
-        => Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly)
+    private static int ViewsWithAFilterBoxCtrlFRecognises()
+        => TestPaths.ViewFiles("*.xaml")
             .Count(f => TextBoxStartTag()
                 .Matches(WithoutXamlComments(File.ReadAllText(f)))
                 .Any(t => TextBindingPath().Match(WhitespaceRun().Replace(t.Value, " ")) is { Success: true } b
-                          && SysManager.Helpers.FilterBoxes.BindingPaths
+                          && SysManager.Shared.Helpers.FilterBoxes.BindingPaths
                               .Contains(b.Groups["path"].Value, StringComparer.Ordinal)));
 
     /// <summary>One <c>TextBox</c> start tag, self-closing or not.</summary>
@@ -6531,7 +6553,7 @@ public partial class ArchitectureTests
     private static HashSet<string> SidebarTabLabels()
     {
         var source = File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
+            TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs"));
 
         // Both registration helpers take (id, label, …); the label is the second string argument.
         return NavRegistration().Matches(source)
@@ -6631,8 +6653,8 @@ public partial class ArchitectureTests
         var referenced = 0;
         var inspected = 0;
 
-        foreach (var file in Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
-                     .Append(Path.Combine(appDir, "MainWindow.xaml"))
+        foreach (var file in TestPaths.ViewFiles("*.xaml")
+                     .Append(TestPaths.AppPath("MainWindow.xaml"))
                      .OrderBy(p => p, StringComparer.Ordinal))
         {
             var markup = WithoutXamlComments(File.ReadAllText(file));
@@ -6768,7 +6790,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheStartupExpansion_GoesThroughTheNamedConstant()
     {
-        var path = Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs");
+        var path = TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs");
         var source = WithoutComments(File.ReadAllText(path));
 
         Assert.True(source.Contains("InitiallyExpandedGroupId", StringComparison.Ordinal),
@@ -6804,7 +6826,7 @@ public partial class ArchitectureTests
     public void OnlyTheJustifiedTabs_AreBuiltAtStartup()
     {
         var source = File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
+            TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs"));
 
         // Scoped to the runtime nav table. BuildDesignerGraph below it constructs everything eagerly by
         // design (there is no container in the designer/test path), so including it would flag the
@@ -6877,7 +6899,7 @@ public partial class ArchitectureTests
     public void TheShellConstructor_ResolvesExactlyTheJustifiedViewModels()
     {
         var source = File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
+            TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs"));
         var start = source.IndexOf("public MainWindowViewModel()", StringComparison.Ordinal);
         var end = start < 0 ? -1 : source.IndexOf("InitNavigation();", start, StringComparison.Ordinal);
         Assert.True(start >= 0 && end > start,
@@ -7139,11 +7161,10 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryServiceThatPersistsUserData_WritesItAtomically()
     {
-        var servicesDir = Path.Combine(TestPaths.AppProject(), "Services");
         var offenders = new List<string>();
         var scanned = 0;
 
-        foreach (var file in Directory.GetFiles(servicesDir, "*.cs"))
+        foreach (var file in TestPaths.LayerFiles("Services", "*.cs").ToArray())
         {
             var name = Path.GetFileName(file);
             if (name is "HostsFileService.cs") continue;
@@ -7229,11 +7250,10 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryStoreThatReadsThenWritesTheSameFile_SerializesThePair()
     {
-        var servicesDir = Path.Combine(TestPaths.AppProject(), "Services");
         var offenders = new List<string>();
         var scanned = 0;
 
-        foreach (var file in Directory.GetFiles(servicesDir, "*.cs"))
+        foreach (var file in TestPaths.LayerFiles("Services", "*.cs").ToArray())
         {
             var name = Path.GetFileName(file);
             // Comment-stripped, so prose naming a read or a lock can neither create a candidate nor
@@ -7505,12 +7525,11 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryIconGlyph_NamesAnIconFont()
     {
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var offenders = new List<string>();
         var scanned = 0;
 
-        var files = Directory.GetFiles(viewsDir, "*.xaml")
-            .Append(Path.Combine(TestPaths.AppProject(), "MainWindow.xaml"))
+        var files = TestPaths.ViewFiles("*.xaml").ToArray()
+            .Append(TestPaths.AppPath("MainWindow.xaml"))
             .Where(File.Exists);
 
         foreach (var file in files)
@@ -7576,8 +7595,8 @@ public partial class ArchitectureTests
     public void EverySidebarGroupGlyph_IsDistinctAndNotTheElevationBadge()
     {
         var app = TestPaths.AppProject();
-        var vm = File.ReadAllText(Path.Combine(app, "ViewModels", "MainWindowViewModel.cs"));
-        var shell = File.ReadAllText(Path.Combine(app, "MainWindow.xaml"));
+        var vm = File.ReadAllText(TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs"));
+        var shell = File.ReadAllText(TestPaths.AppPath("MainWindow.xaml"));
 
         var groups = GroupGlyph().Matches(vm).Cast<Match>()
             .Select(m => (Id: m.Groups["id"].Value, Glyph: m.Groups["glyph"].Value.ToUpperInvariant()))
@@ -7645,8 +7664,8 @@ public partial class ArchitectureTests
     public void EverySidebarGroupSubtitle_IsWrittenCopyThatFitsTwoLines()
     {
         var app = TestPaths.AppProject();
-        var vm = File.ReadAllText(Path.Combine(app, "ViewModels", "MainWindowViewModel.cs"));
-        var shell = File.ReadAllText(Path.Combine(app, "MainWindow.xaml"));
+        var vm = File.ReadAllText(TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs"));
+        var shell = File.ReadAllText(TestPaths.AppPath("MainWindow.xaml"));
 
         var groups = GroupSubtitle().Matches(vm).Cast<Match>()
             .Select(m => (Id: m.Groups["id"].Value,
@@ -8078,7 +8097,7 @@ public partial class ArchitectureTests
         Assert.Contains("{Version}", LogService.StartupMessage, StringComparison.Ordinal);
 
         var initCall = File.ReadAllLines(
-                Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager", "Services", "LogService.cs"))
+                TestPaths.AppPath("Services", "LogService.cs"))
             .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))
             .FirstOrDefault(l => l.Contains("Information(StartupMessage", StringComparison.Ordinal));
         Assert.False(initCall is null,
@@ -8521,8 +8540,7 @@ public partial class ArchitectureTests
         ];
 
         var appDir = TestPaths.AppProject();
-        var viewsDir = Path.Combine(appDir, "Views");
-        var files = Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly).ToArray();
+        var files = TestPaths.ViewFiles("*.xaml").ToArray();
 
         var silent = new List<string>();
         var overAnnounced = new List<string>();
@@ -8654,8 +8672,7 @@ public partial class ArchitectureTests
         const int mustWrapAbove = 80;
 
         var appDir = TestPaths.AppProject();
-        var viewsDir = Path.Combine(appDir, "Views");
-        var files = Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly).ToArray();
+        var files = TestPaths.ViewFiles("*.xaml").ToArray();
 
         var offenders = new List<string>();
         var tabsChecked = 0;
@@ -8819,7 +8836,7 @@ public partial class ArchitectureTests
     public void TheSensorTopologyLog_RunsOncePerSession_NotOncePerPoll()
     {
         var source = File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "Services", "TemperatureService.cs"));
+            TestPaths.AppPath("Services", "TemperatureService.cs"));
 
         const string flag = "_loggedSensorTopology";
         Assert.Contains($"private bool {flag};", source, StringComparison.Ordinal);
@@ -8861,7 +8878,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryMachineRunKey_ReadsAndWritesItsOwnStartupApprovedKey()
     {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Services", "StartupService.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("Services", "StartupService.cs"));
 
         // The 32-bit Run key must actually be enumerated. Without this the rest of the guard would pass
         // on a scan that never produces a 32-bit entry at all — which is precisely the pre-fix state.
@@ -8934,7 +8951,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryStartupSourceWithNoApprovedKey_IsRefusedInsteadOfFakingSuccess()
     {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Services", "StartupService.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("Services", "StartupService.cs"));
 
         // The key must actually be enumerated, or everything below would hold over a scan that never
         // produces a policy entry — the pre-fix state, and a guard passing on the defect.
@@ -9012,10 +9029,10 @@ public partial class ArchitectureTests
         var allowed = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["ServiceRegistration.cs"] = "hands the delegate to the single seam",
-            ["ViewModels/MainWindowViewModel.cs"] = "the designer/test graph's equivalent wiring",
-            ["Services/PerformanceService.cs"] = "the MANUAL 'create a restore point' button — the user asked",
-            ["ViewModels/RestorePointsViewModel.cs"] = "the Restore Points tab, where creating one is the feature",
-            ["Services/RestorePointService.cs"] = "declares it",
+            ["Shell/MainWindowViewModel.cs"] = "the designer/test graph's equivalent wiring",
+            ["Shared/Services/PerformanceService.cs"] = "the MANUAL 'create a restore point' button — the user asked",
+            ["Features/RestorePoints/RestorePointsViewModel.cs"] = "the Restore Points tab, where creating one is the feature",
+            ["Shared/Services/RestorePointService.cs"] = "declares it",
         };
 
         var offenders = new List<string>();
@@ -9033,7 +9050,7 @@ public partial class ArchitectureTests
                 implementations.Add(relative);
 
             // The copied pattern: a per-feature "did I already try this session" flag.
-            if (RestorePointAttemptFlag().IsMatch(code) && relative != "Services/SessionRestorePoint.cs")
+            if (RestorePointAttemptFlag().IsMatch(code) && relative != "Shared/Services/SessionRestorePoint.cs")
                 offenders.Add($"{relative} keeps its own once-per-session restore-point flag. Use "
                     + "ISessionRestorePoint — a second copy means two features each burn the 24-hour "
                     + "limit and the loser reports no snapshot while one exists.");
@@ -9055,7 +9072,7 @@ public partial class ArchitectureTests
             + "so the allowlist above is not being enforced.");
 
         Assert.Single(implementations);
-        Assert.Equal("Services/SessionRestorePoint.cs", implementations[0]);
+        Assert.Equal("Shared/Services/SessionRestorePoint.cs", implementations[0]);
 
         Assert.True(offenders.Count == 0,
             "the automatic restore point must have exactly one owner:\n  - " + string.Join("\n  - ", offenders));
@@ -9085,7 +9102,6 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryAutomaticSnapshot_ComesBeforeItsChangeAndIsNeverOverClaimed()
     {
-        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
 
         // file -> the member that owns the mutation, and the mutation that must come AFTER the snapshot.
         var expected = new (string File, string Member, string Mutation)[]
@@ -9097,8 +9113,7 @@ public partial class ArchitectureTests
             ("WindowsFeaturesViewModel.cs", "private async Task ToggleFeatureAsync(", "_service.DisableFeatureAsync("),
         };
 
-        var consumers = Directory
-            .EnumerateFiles(vmDir, "*ViewModel.cs")
+        var consumers = TestPaths.ViewModelFiles("*ViewModel.cs")
             .Where(f => File.ReadAllText(f).Contains("ISessionRestorePoint", StringComparison.Ordinal))
             .Select(f => Path.GetFileName(f))
             .OrderBy(n => n, StringComparer.Ordinal)
@@ -9112,7 +9127,7 @@ public partial class ArchitectureTests
         {
             // Comments stripped: the note AT each call site explains the ordering rule and names both
             // sides of it, so a guard that reads prose would pass on code that has it backwards.
-            var code = WithoutComments(File.ReadAllText(Path.Combine(vmDir, file)));
+            var code = WithoutComments(File.ReadAllText(TestPaths.AppPath("ViewModels", file)));
             var slice = MemberSlice(code, member);
             Assert.False(string.IsNullOrWhiteSpace(slice),
                 $"{file}: '{member}' not found — the slice is empty, so every check below would pass "
@@ -9259,7 +9274,7 @@ public partial class ArchitectureTests
     public void PerformanceMode_RefusesToCaptureABaselineDuringAGameSession()
     {
         var vm = File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "ViewModels", "PerformanceViewModel.cs"));
+            TestPaths.AppPath("ViewModels", "PerformanceViewModel.cs"));
 
         // Comment-stripped: the paragraph above the check names both TakeSnapshotAsync and the session,
         // and a positional assertion that reads prose reports the ordering backwards (batch 106).
@@ -9301,7 +9316,7 @@ public partial class ArchitectureTests
         // would answer "no session" while the real one had a game running, i.e. exactly the state that
         // must never be snapshotted, with the guard above still passing.
         var shell = WithoutComments(File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs")));
+            TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs")));
         var built = shell.Split("new GamingProfileService(").Length - 1;
         if (built != 1)
             offenders.Add($"MainWindowViewModel constructs GamingProfileService {built} times; the designer "
@@ -9343,7 +9358,7 @@ public partial class ArchitectureTests
                 "the Camera/Mic/Location naming is owned by its own issue, which decides both sides at once"),
         };
 
-        var vm = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
+        var vm = File.ReadAllText(TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs"));
         var nav = MemberSlice(vm, "private NavGroup[] BuildNavGroups()");
         Assert.True(nav.Length > 2000,
             $"the BuildNavGroups slice is {nav.Length} chars — too short to hold 59 tabs, so this guard "
@@ -9363,7 +9378,7 @@ public partial class ArchitectureTests
             var label = entry.Groups[2].Value;
             var view = entry.Groups[3].Value;
 
-            var path = Path.Combine(TestPaths.AppProject(), "Views", view + ".xaml");
+            var path = TestPaths.AppPath("Views", view + ".xaml");
             Assert.True(File.Exists(path), $"{view}.xaml is referenced by {navId} but does not exist");
 
             // Comments stripped so a commented-out old header cannot be read as the live one.
@@ -9409,7 +9424,7 @@ public partial class ArchitectureTests
     }
 
     // Tab<TVm>("nav-id", "Label", typeof(Views.SomeView)  /  EagerItem("nav-id", "Label", typeof(Views.SomeView)
-    [GeneratedRegex(@"(?:Tab<\w+>|EagerItem)\(\s*""([^""]+)""\s*,\s*""([^""]+)""\s*,\s*typeof\(Views\.(\w+)\)",
+    [GeneratedRegex(@"(?:Tab<\w+>|EagerItem)\(\s*""([^""]+)""\s*,\s*""([^""]+)""\s*,\s*typeof\((\w+)\)",
                     RegexOptions.Compiled)]
     private static partial Regex NavEntry();
 
@@ -9441,7 +9456,7 @@ public partial class ArchitectureTests
         const int PilledBudget = 21;   // "Scheduled Maintenance"
         const int PlainBudget = 23;    // "Profile Export / Import"
 
-        var vm = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
+        var vm = File.ReadAllText(TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs"));
         var nav = MemberSlice(vm, "private NavGroup[] BuildNavGroups()");
         Assert.True(nav.Length > 2000,
             $"the BuildNavGroups slice is {nav.Length} chars — too short to hold the sidebar, so this "
@@ -9523,7 +9538,7 @@ public partial class ArchitectureTests
     public void GamingProfileMutations_TakeTheLockAndOnlyApplyRefuses()
     {
         var service = File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "Services", "GamingProfileService.cs"));
+            TestPaths.AppPath("Services", "GamingProfileService.cs"));
 
         // Comments are stripped from every slice before anything is matched. The first draft of this
         // guard went false-RED on its own explanatory comment: the paragraph above the acquire names
@@ -9632,7 +9647,7 @@ public partial class ArchitectureTests
     public void TheUpdateRetryLoop_RetriesOnlyTheMove()
     {
         var source = File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "Services", "UpdateApplier.cs"));
+            TestPaths.AppPath("Services", "UpdateApplier.cs"));
         var apply = WithoutComments(MemberSlice(source, "internal static bool ApplyCopy("));
 
         Assert.True(apply.Length > 400,
@@ -9695,7 +9710,7 @@ public partial class ArchitectureTests
     public void OnlySafeFileWalk_WalksATreeItMightDeleteFrom()
     {
         var appDir = TestPaths.AppProject();
-        var theWalk = Path.Combine(appDir, "Helpers", "SafeFileWalk.cs");
+        var theWalk = TestPaths.AppPath("Helpers", "SafeFileWalk.cs");
         Assert.True(File.Exists(theWalk),
             $"SafeFileWalk.cs was not found at {theWalk} — this guard is named for a type that must exist.");
 
@@ -9749,7 +9764,7 @@ public partial class ArchitectureTests
         // and a junction there sends the whole scan somewhere else (#2381).
         foreach (var (service, viewModel) in readOnlyScanners)
         {
-            var exemptPath = Path.Combine(appDir, "Services", service);
+            var exemptPath = TestPaths.AppPath("Services", service);
             Assert.True(File.Exists(exemptPath),
                 $"{service} is exempted from this guard but no longer exists — drop it from the list.");
 
@@ -9763,7 +9778,7 @@ public partial class ArchitectureTests
 
             // And the reason for the exemption: nothing on the tab deletes what the walk found. The view model
             // is checked as well, because that is where a "Delete selected" command would be added.
-            var viewModelPath = Path.Combine(appDir, "ViewModels", viewModel);
+            var viewModelPath = TestPaths.AppPath("ViewModels", viewModel);
             Assert.True(File.Exists(viewModelPath),
                 $"{viewModel}, paired with {service}, no longer exists — pair the scanner with the view model "
                 + "behind its tab, or this half of the check reads nothing.");
@@ -9797,7 +9812,7 @@ public partial class ArchitectureTests
         string[] destructiveServices = ["FileShredderService.cs", "ShortcutCleanerService.cs", "BrowserCleanerService.cs"];
         foreach (var destructive in destructiveServices)
         {
-            var code = WithoutComments(File.ReadAllText(Path.Combine(appDir, "Services", destructive)));
+            var code = WithoutComments(File.ReadAllText(TestPaths.AppPath("Services", destructive)));
             Assert.True(DeletingCall().IsMatch(code),
                 $"{destructive} no longer registers as deleting anything. The pattern has drifted from the shapes "
                 + "the app uses, so the read-only check above proves nothing until it is re-derived.");
@@ -9925,7 +9940,7 @@ public partial class ArchitectureTests
     public void TheShredderOverwrite_CannotBeCancelledMidWrite()
     {
         var source = File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "Services", "FileShredderService.cs"));
+            TestPaths.AppPath("Services", "FileShredderService.cs"));
         var slice = WithoutComments(MemberSlice(source, "public async Task<int> ShredFileAsync"));
 
         Assert.True(slice.Length > 500,
@@ -9975,7 +9990,7 @@ public partial class ArchitectureTests
     public void OnlyTheMutatingCliVerbs_RecordAHeadlessRun()
     {
         var source = WithoutComments(File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "Services", "CliRunner.cs")));
+            TestPaths.AppPath("Services", "CliRunner.cs")));
 
         const string call = "RecordHeadlessRun(";
 
@@ -10015,7 +10030,7 @@ public partial class ArchitectureTests
     public void EveryPresetDecisionOverTheEntryList_IsLimitedToVerbRows()
     {
         var source = WithoutComments(File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "ViewModels", "ContextMenuViewModel.cs")));
+            TestPaths.AppPath("ViewModels", "ContextMenuViewModel.cs")));
 
         // The gate itself must compare Kind. Asserted as the whole comparison, not just the enum name:
         // ContextMenuEntryKind.MenuEntry appears in this file in places that decide nothing, so matching
@@ -10089,7 +10104,7 @@ public partial class ArchitectureTests
     [InlineData("ServicesView.xaml")]
     public void EveryRowMenuCommand_IsAlsoOnARowButton(string viewFile)
     {
-        var xaml = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Views", viewFile));
+        var xaml = File.ReadAllText(TestPaths.AppPath("Views", viewFile));
 
         var menuCommands = RowMenuCommand().Matches(xaml)
             .Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
@@ -10132,7 +10147,7 @@ public partial class ArchitectureTests
         var appDir = TestPaths.AppProject();
 
         var declared = NavEntry()
-            .Matches(MemberSlice(File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")),
+            .Matches(MemberSlice(File.ReadAllText(TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs")),
                                  "private NavGroup[] BuildNavGroups()"))
             .Select(m => m.Groups[1].Value)
             .ToHashSet(StringComparer.Ordinal);
@@ -10188,9 +10203,8 @@ public partial class ArchitectureTests
     [Fact]
     public void NoInverseConverterParameter_IsGivenToTheConverterThatIgnoresIt()
     {
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
-        var files = Directory.GetFiles(viewsDir, "*.xaml")
-            .Append(Path.Combine(TestPaths.AppProject(), "MainWindow.xaml"))
+        var files = TestPaths.ViewFiles("*.xaml").ToArray()
+            .Append(TestPaths.AppPath("MainWindow.xaml"))
             .ToList();
 
         Assert.True(files.Count >= 50,
@@ -10236,7 +10250,7 @@ public partial class ArchitectureTests
     public void EveryJargonNamedTab_CanBeFoundByPlainWords()
     {
         var nav = MemberSlice(
-            File.ReadAllText(Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs")),
+            File.ReadAllText(TestPaths.AppPath("ViewModels", "MainWindowViewModel.cs")),
             "private NavGroup[] BuildNavGroups()");
 
         var entries = NavEntry().Matches(nav).Cast<Match>().ToArray();
@@ -10292,11 +10306,10 @@ public partial class ArchitectureTests
     [Fact]
     public void NoViewModelReachesTheShellThroughTheLiveWindow()
     {
-        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var offenders = new List<string>();
         var scanned = 0;
 
-        foreach (var file in Directory.GetFiles(vmDir, "*.cs"))
+        foreach (var file in TestPaths.ViewModelFiles("*.cs").ToArray())
         {
             scanned++;
             var code = WithoutComments(File.ReadAllText(file));
@@ -10341,7 +10354,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheContextMenuToggle_WarnsThatBlockingAnAddOnNeedsAdmin()
     {
-        var view = Path.Combine(TestPaths.AppProject(), "Views", "ContextMenuView.xaml");
+        var view = TestPaths.AppPath("Views", "ContextMenuView.xaml");
         var triggers = XDocument.Load(view).Descendants()
             .Where(e => e.Name.LocalName == "DataTrigger")
             .Where(e => ((string?)e.Attribute("Binding") ?? "").Contains("RequiresElevation", StringComparison.Ordinal))
@@ -10450,31 +10463,31 @@ public partial class ArchitectureTests
             // A Windows-defined device class GUID, not a SysManager convention. Both readers want the
             // display-adapters class; neither owns it.
             [@"system\currentcontrolset\control\class\{4d36e968-e325-11ce-bfc1-08002be10318}"] =
-                "Helpers/GpuVramHelper.cs,Services/PerformanceService.cs",
+                "Shared/Helpers/GpuVramHelper.cs,Shared/Services/PerformanceService.cs",
 
             // The two Uninstall roots. AppAlertService watches them for newly installed apps;
             // UninstallerService enumerates them to list programs. Same roots, different jobs.
             [@"software\microsoft\windows\currentversion\uninstall"] =
-                "Services/AppAlertService.cs,Services/UninstallerService.cs",
+                "Features/AppAlerts/Services/AppAlertService.cs,Features/Uninstaller/Services/UninstallerService.cs",
             [@"software\wow6432node\microsoft\windows\currentversion\uninstall"] =
-                "Services/AppAlertService.cs,Services/UninstallerService.cs",
+                "Features/AppAlerts/Services/AppAlertService.cs,Features/Uninstaller/Services/UninstallerService.cs",
 
             // SettingsWatchdogService re-declares the policy keys PrivacyService writes, so it can notice
             // when Windows silently reverts them. Watching your own writes needs the same path twice, but
             // it is still duplication: correct one and not the other and the watchdog quietly stops
             // watching the toggle it is named after.
             [@"hklm\software\policies\microsoft\windows\datacollection"] =
-                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
+                "Shared/Services/PrivacyService.cs,Shared/Services/SettingsWatchdogService.cs",
             [@"hklm\software\policies\microsoft\windows\system"] =
-                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
+                "Shared/Services/PrivacyService.cs,Shared/Services/SettingsWatchdogService.cs",
             [@"hkcu\software\microsoft\windows\currentversion\advertisinginfo"] =
-                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
+                "Shared/Services/PrivacyService.cs,Shared/Services/SettingsWatchdogService.cs",
             [@"hkcu\software\microsoft\windows\currentversion\contentdeliverymanager"] =
-                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
+                "Shared/Services/PrivacyService.cs,Shared/Services/SettingsWatchdogService.cs",
             [@"hkcu\software\policies\microsoft\windows\explorer"] =
-                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
+                "Shared/Services/PrivacyService.cs,Shared/Services/SettingsWatchdogService.cs",
             [@"hklm\software\policies\microsoft\dsh"] =
-                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
+                "Shared/Services/PrivacyService.cs,Shared/Services/SettingsWatchdogService.cs",
         };
 
         var appDir = TestPaths.AppProject();
@@ -10573,7 +10586,7 @@ public partial class ArchitectureTests
     public void TheStartupTabCopy_DescribesTheTaskScanItActuallyRuns()
     {
         var appDir = TestPaths.AppProject();
-        var service = File.ReadAllText(Path.Combine(appDir, "Services", "StartupService.cs"));
+        var service = File.ReadAllText(TestPaths.AppPath("Services", "StartupService.cs"));
 
         // Slice the scan itself, so a mention anywhere else in this 900-line service cannot stand in for it.
         var scanAt = service.IndexOf("internal static bool ReadScheduledTasks", StringComparison.Ordinal);
@@ -10600,13 +10613,12 @@ public partial class ArchitectureTests
             .Count(marker => scan.Contains(marker, StringComparison.Ordinal));
         Assert.Equal(2, exclusions);
 
-        var views = Path.Combine(appDir, "Views");
         // Comments stripped: a comment naming the other tab must not count as telling the user about it.
         // The neighbouring guard's first draft stayed green for exactly that reason.
         var startupView = Collapse(XmlComment().Replace(
-            File.ReadAllText(Path.Combine(views, "StartupView.xaml")), string.Empty));
+            File.ReadAllText(TestPaths.AppPath("Views", "StartupView.xaml")), string.Empty));
         var taskView = Collapse(XmlComment().Replace(
-            File.ReadAllText(Path.Combine(views, "TaskSchedulerView.xaml")), string.Empty));
+            File.ReadAllText(TestPaths.AppPath("Views", "TaskSchedulerView.xaml")), string.Empty));
 
         var root = TestPaths.RepoRoot();
         var readme = Collapse(File.ReadAllText(Path.Combine(root, "README.md")));
@@ -10655,7 +10667,7 @@ public partial class ArchitectureTests
 
         // The ARCHITECTURE count is spelled out in prose, which is exactly what drifts: it was written when
         // there were four sources and had to be re-derived twice since. Pin it to the enum.
-        var model = File.ReadAllText(Path.Combine(appDir, "Models", "StartupEntry.cs"));
+        var model = File.ReadAllText(TestPaths.AppPath("Models", "StartupEntry.cs"));
         var enumAt = model.IndexOf("public enum StartupSource", StringComparison.Ordinal);
         Assert.True(enumAt > 0, "StartupSource was not found — the count below would be invented.");
         // Comments come off BEFORE the braces are matched: a doc comment containing a brace would
@@ -10716,7 +10728,7 @@ public partial class ArchitectureTests
         string Service(string file)
         {
             if (!services.TryGetValue(file, out var text))
-                services[file] = text = File.ReadAllText(Path.Combine(appDir, "Services", file));
+                services[file] = text = File.ReadAllText(TestPaths.AppPath("Services", file));
             return text;
         }
 
@@ -10724,7 +10736,7 @@ public partial class ArchitectureTests
         {
             if (!views.TryGetValue(file, out var text))
                 views[file] = text = XmlComment().Replace(
-                    File.ReadAllText(Path.Combine(appDir, "Views", file)), string.Empty);
+                    File.ReadAllText(TestPaths.AppPath("Views", file)), string.Empty);
             return text;
         }
 
@@ -10805,9 +10817,9 @@ public partial class ArchitectureTests
     public void EveryMaintenanceConditionTheScheduleCarries_HasACheckBoxInTheView()
     {
         var appDir = TestPaths.AppProject();
-        var model = File.ReadAllText(Path.Combine(appDir, "Models", "MaintenanceSchedule.cs"));
+        var model = File.ReadAllText(TestPaths.AppPath("Models", "MaintenanceSchedule.cs"));
         var view = XmlComment().Replace(
-            File.ReadAllText(Path.Combine(appDir, "Views", "ScheduledMaintenanceView.xaml")), string.Empty);
+            File.ReadAllText(TestPaths.AppPath("Views", "ScheduledMaintenanceView.xaml")), string.Empty);
 
         // Sliced to the MaintenanceSchedule record's parameter list. MaintenanceStatus lives in the same
         // file and has optional parameters of its own, and those are read back from Windows rather than
@@ -10877,9 +10889,9 @@ public partial class ArchitectureTests
     {
         var appDir = TestPaths.AppProject();
         var service = DocComment().Replace(
-            File.ReadAllText(Path.Combine(appDir, "Services", "StartupService.cs")), string.Empty);
+            File.ReadAllText(TestPaths.AppPath("Services", "StartupService.cs")), string.Empty);
         var view = WithoutXamlComments(
-            File.ReadAllText(Path.Combine(appDir, "Views", "StartupView.xaml")));
+            File.ReadAllText(TestPaths.AppPath("Views", "StartupView.xaml")));
 
         // What the user is entitled to see, because the scan pays to work it out. Two lists, because the
         // scan fills a StartupEntry in two ways and they carry different invariants.
@@ -11025,8 +11037,8 @@ public partial class ArchitectureTests
     {
         var appDir = TestPaths.AppProject();
         var view = XmlComment().Replace(
-            File.ReadAllText(Path.Combine(appDir, "Views", "ProcessManagerView.xaml")), string.Empty);
-        var service = File.ReadAllText(Path.Combine(appDir, "Services", "ProcessManagerService.cs"));
+            File.ReadAllText(TestPaths.AppPath("Views", "ProcessManagerView.xaml")), string.Empty);
+        var service = File.ReadAllText(TestPaths.AppPath("Services", "ProcessManagerService.cs"));
 
         foreach (var (fragment, why) in new[]
                  {
@@ -11046,7 +11058,7 @@ public partial class ArchitectureTests
         // And that something actually runs the pass. Every unit test calls VerifySignatures directly, so
         // nothing calling it in production would leave all of them green while the column stayed empty —
         // the unbound-surface defect one level up.
-        var vm = File.ReadAllText(Path.Combine(appDir, "ViewModels", "ProcessManagerViewModel.cs"));
+        var vm = File.ReadAllText(TestPaths.AppPath("ViewModels", "ProcessManagerViewModel.cs"));
         Assert.Contains("StartSignatureFill();", vm, StringComparison.Ordinal);
         Assert.Contains("ProcessManagerService.VerifySignatures(pending, cache)", vm, StringComparison.Ordinal);
 
@@ -11100,9 +11112,9 @@ public partial class ArchitectureTests
     {
         var appDir = TestPaths.AppProject();
         var model = DocComment().Replace(
-            File.ReadAllText(Path.Combine(appDir, "Models", "ProcessEntry.cs")), string.Empty);
+            File.ReadAllText(TestPaths.AppPath("Models", "ProcessEntry.cs")), string.Empty);
         var view = WithoutXamlComments(
-            File.ReadAllText(Path.Combine(appDir, "Views", "ProcessManagerView.xaml")));
+            File.ReadAllText(TestPaths.AppPath("Views", "ProcessManagerView.xaml")));
 
         var fields = ObservablePropertyField().Matches(model)
             .Select(m => char.ToUpperInvariant(m.Groups[1].Value[0]) + m.Groups[1].Value[1..])
@@ -11316,13 +11328,12 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryBandwidthSource_LeavesTheOffloadToItsConsumer()
     {
-        var servicesDir = Path.Combine(TestPaths.AppProject(), "Services");
-        var sources = Directory.GetFiles(servicesDir, "*BandwidthSource.cs");
+        var sources = TestPaths.LayerFiles("Services", "*BandwidthSource.cs").ToArray();
 
         // Vacuity floor: two implementors exist (connection + ETW). If the glob stops matching them, the
         // loop below inspects nothing and the guard reports success.
         Assert.True(sources.Length >= 2,
-            $"only {sources.Length} bandwidth sources found in {servicesDir} — the guard is measuring "
+            $"only {sources.Length} bandwidth sources found in the app's Services folders — the guard is measuring "
             + "nothing, fix it rather than trusting its pass");
 
         var offenders = new List<string>();
@@ -11702,13 +11713,11 @@ public partial class ArchitectureTests
     public void EveryTransientReadout_IsClearedWhenItsOperationEnds()
     {
         var appDir = TestPaths.AppProject();
-        var vmDir = Path.Combine(appDir, "ViewModels");
-        var viewsDir = Path.Combine(appDir, "Views");
 
         var offenders = new List<string>();
         var checkedProperties = 0;
 
-        foreach (var file in Directory.GetFiles(vmDir, "*ViewModel.cs"))
+        foreach (var file in TestPaths.ViewModelFiles("*ViewModel.cs").ToArray())
         {
             var source = File.ReadAllText(file);
             var vmName = Path.GetFileNameWithoutExtension(file);
@@ -11734,7 +11743,7 @@ public partial class ArchitectureTests
                 // binding somewhere". The looser form waved SpeedTestView through on the strength of the
                 // Visibility bindings on its ProgressBar and Cancel button, which have nothing to do with
                 // the ETA TextBlock — leaving this guard green against the exact defect it was written for.
-                var viewPath = Path.Combine(viewsDir, vmName.Replace("ViewModel", "View") + ".xaml");
+                var viewPath = TestPaths.AppPath("Views", vmName.Replace("ViewModel", "View") + ".xaml");
                 if (File.Exists(viewPath) && ReadoutElementSitsInAFlagGatedContainer(viewPath, property))
                     continue;
 
@@ -11782,14 +11791,12 @@ public partial class ArchitectureTests
     public void EveryProgressPercentageAViewModelComputes_IsBoundToAProgressBar()
     {
         var appDir = TestPaths.AppProject();
-        var vmDir = Path.Combine(appDir, "ViewModels");
-        var viewsDir = Path.Combine(appDir, "Views");
 
         var offenders = new List<string>();
         var viewModels = 0;
         var properties = 0;
 
-        foreach (var file in Directory.GetFiles(vmDir, "*ViewModel.cs").OrderBy(p => p, StringComparer.Ordinal))
+        foreach (var file in TestPaths.ViewModelFiles("*ViewModel.cs").ToArray().OrderBy(p => p, StringComparer.Ordinal))
         {
             var vmName = Path.GetFileNameWithoutExtension(file);
             var source = WithoutComments(File.ReadAllText(file));
@@ -11804,7 +11811,7 @@ public partial class ArchitectureTests
             viewModels++;
             properties += computed.Count;
 
-            var viewPath = Path.Combine(viewsDir, vmName.Replace("ViewModel", "View", StringComparison.Ordinal) + ".xaml");
+            var viewPath = TestPaths.AppPath("Views", vmName.Replace("ViewModel", "View", StringComparison.Ordinal) + ".xaml");
             if (!File.Exists(viewPath))
             {
                 offenders.Add($"{vmName} computes {string.Join(", ", computed.Order(StringComparer.Ordinal))} "
@@ -11861,14 +11868,14 @@ public partial class ArchitectureTests
         var viewModels = 0;
         var offenders = new List<string>();
 
-        foreach (var file in Directory.GetFiles(Path.Combine(appDir, "ViewModels"), "*ViewModel.cs")
+        foreach (var file in TestPaths.ViewModelFiles("*ViewModel.cs").ToArray()
                      .OrderBy(p => p, StringComparer.Ordinal))
         {
             if (!ConsoleProperty().IsMatch(WithoutComments(File.ReadAllText(file)))) continue;
             viewModels++;
 
             var vmName = Path.GetFileNameWithoutExtension(file);
-            var view = Path.Combine(appDir, "Views", vmName.Replace("ViewModel", "View", StringComparison.Ordinal) + ".xaml");
+            var view = TestPaths.AppPath("Views", vmName.Replace("ViewModel", "View", StringComparison.Ordinal) + ".xaml");
             if (!File.Exists(view))
             {
                 offenders.Add($"{vmName} owns a Console but has no matching view file");
@@ -12182,7 +12189,7 @@ public partial class ArchitectureTests
     {
         var appDir = TestPaths.AppProject();
 
-        var contract = File.ReadAllText(Path.Combine(appDir, "Services", "IAudioMixerService.cs"));
+        var contract = File.ReadAllText(TestPaths.AppPath("Services", "IAudioMixerService.cs"));
         var writes = BoolReturningMember().Matches(contract).Select(m => m.Groups["name"].Value).ToList();
 
         // Vacuity floor from an enumerated population: SetVolume, SetMute, SetSessionOutputDevice.
@@ -12191,7 +12198,7 @@ public partial class ArchitectureTests
           + "stopped matching, so this guard is measuring nothing.");
 
         var offenders = new List<string>();
-        foreach (var file in Directory.GetFiles(Path.Combine(appDir, "ViewModels"), "*.cs"))
+        foreach (var file in TestPaths.ViewModelFiles("*.cs").ToArray())
         {
             var lines = File.ReadAllLines(file);
             for (var i = 0; i < lines.Length; i++)
@@ -12260,11 +12267,10 @@ public partial class ArchitectureTests
             "ProcessManagerService.cs",     // a list with no claim attached, refreshed on a timer
         ];
 
-        var servicesDir = Path.Combine(TestPaths.AppProject(), "Services");
         var offenders = new List<string>();
         var population = 0;
 
-        foreach (var path in Directory.EnumerateFiles(servicesDir, "*.cs", SearchOption.TopDirectoryOnly))
+        foreach (var path in TestPaths.LayerFiles("Services", "*.cs"))
         {
             var file = Path.GetFileName(path);
             var code = string.Join("\n", File.ReadAllLines(path).Where(IsCode));
@@ -12343,8 +12349,6 @@ public partial class ArchitectureTests
         ];
 
         var appDir = TestPaths.AppProject();
-        var viewsDir = Path.Combine(appDir, "Views");
-        var vmDir = Path.Combine(appDir, "ViewModels");
 
         // Every property any view announces. StatusMessage is included whenever a view uses
         // <v:StatusFooter/>, which renders it through StatusLine from ANOTHER file — most tabs reach it that
@@ -12352,7 +12356,7 @@ public partial class ArchitectureTests
         string[] announcedStyles = ["{StaticResource StatusLine}", "{StaticResource SubtleStatusLine}"];
         var announced = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var path in Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly))
+        foreach (var path in TestPaths.ViewFiles("*.xaml"))
         {
             var root = System.Xml.Linq.XDocument.Load(path).Root;
             if (root is null) continue;
@@ -12387,7 +12391,7 @@ public partial class ArchitectureTests
         var offenders = new List<string>();
         var callbacksSeen = 0;
 
-        foreach (var file in Directory.EnumerateFiles(vmDir, "*ViewModel.cs", SearchOption.TopDirectoryOnly))
+        foreach (var file in TestPaths.ViewModelFiles("*ViewModel.cs"))
         {
             var vm = Path.GetFileNameWithoutExtension(file);
             var code = WithoutComments(File.ReadAllText(file));
@@ -12584,7 +12588,6 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryProgressCallbackRacingItsCallersOutcome_ReportsThroughSettlingProgress()
     {
-        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
 
         // The construction reader still tells the two types apart, positively AND negatively. That group is
         // the whole verdict here: a migrated site misread as raw reports eleven false offenders, while a raw
@@ -12630,7 +12633,7 @@ public partial class ArchitectureTests
         var settled = new List<string>();
         var quiet = new List<string>();
 
-        foreach (var file in Directory.EnumerateFiles(vmDir, "*ViewModel.cs", SearchOption.TopDirectoryOnly))
+        foreach (var file in TestPaths.ViewModelFiles("*ViewModel.cs"))
         {
             var vm = Path.GetFileNameWithoutExtension(file);
             var code = WithoutComments(File.ReadAllText(file));
@@ -12758,7 +12761,7 @@ public partial class ArchitectureTests
         // Floors on both corpora. Measured when written: 12 constructions across ViewModels, 11 of them
         // racing their caller and one — Dashboard's tune-up — genuinely not.
         Assert.True(sites >= 10,
-            $"only {sites} progress constructions were found under {vmDir}, against the 12 this guard was "
+            $"only {sites} progress constructions were found in the view models, against the 12 this guard was "
             + "written against — the construction shape is out of date, so nothing is being read.");
         Assert.True(racing >= 9,
             $"only {racing} of {sites} constructions were found to race their caller, against the 11 measured "
@@ -12849,10 +12852,9 @@ public partial class ArchitectureTests
     [Fact]
     public void NoRevertBaseline_IsRecapturedInASelectionChangedHandler()
     {
-        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var handlersScanned = 0;
 
-        foreach (var path in Directory.EnumerateFiles(vmDir, "*ViewModel.cs").OrderBy(p => p, StringComparer.Ordinal))
+        foreach (var path in TestPaths.ViewModelFiles("*ViewModel.cs").OrderBy(p => p, StringComparer.Ordinal))
         {
             // Comments stripped: the field this rule exists for documents the rule at its declaration,
             // so a guard reading prose would pass on code that does the wrong thing.
@@ -12930,7 +12932,7 @@ public partial class ArchitectureTests
         // Comments stripped: the declaration documents this exact ordering right above itself, so a
         // guard that read prose would pass on code that has the binding backwards.
         var code = WithoutComments(File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "Services", "TimerResolutionService.cs")));
+            TestPaths.AppPath("Services", "TimerResolutionService.cs")));
 
         string[] expected = ["coarsest", "finest", "current"];
 
@@ -13021,7 +13023,7 @@ public partial class ArchitectureTests
 
         var appDir = TestPaths.AppProject();
         var files = Directory.GetFiles(appDir, "*.xaml")
-            .Concat(Directory.GetFiles(Path.Combine(appDir, "Views"), "*.xaml"))
+            .Concat(TestPaths.ViewFiles("*.xaml").ToArray())
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
                                     StringComparison.Ordinal))
             .ToList();
@@ -13121,11 +13123,10 @@ public partial class ArchitectureTests
                 + "grid and UpdateSourceTrigger=PropertyChanged carries each keystroke to the view-model",
         };
 
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var columnsChecked = 0;
         var typeable = new List<string>();
 
-        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        foreach (var file in TestPaths.ViewFiles("*.xaml").ToArray())
         {
             var name = Path.GetFileName(file);
             var text = File.ReadAllText(file);
@@ -13205,11 +13206,10 @@ public partial class ArchitectureTests
                                               + "drag gesture rather than work in progress",
         };
 
-        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var withFlags = 0;
         var missing = new List<string>();
 
-        foreach (var file in Directory.GetFiles(vmDir, "*ViewModel.cs"))
+        foreach (var file in TestPaths.ViewModelFiles("*ViewModel.cs").ToArray())
         {
             var name = Path.GetFileName(file);
             var code = WithoutComments(File.ReadAllText(file));
@@ -13260,7 +13260,7 @@ public partial class ArchitectureTests
     public void TheSnapshotCacheLock_HoldsOnlyCachedQueries()
     {
         var source = WithoutComments(File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "Services", "SystemInfoService.cs")));
+            TestPaths.AppPath("Services", "SystemInfoService.cs")));
         var block = BalancedBlock(source, "lock (_cacheLock)");
 
         // Vacuity floor. An empty or mis-sliced block would satisfy every assertion below without reading
@@ -13301,7 +13301,7 @@ public partial class ArchitectureTests
     public void NoWmiRunsOnTheSnapshotPollPath()
     {
         var source = WithoutComments(File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "Services", "SystemInfoService.cs")));
+            TestPaths.AppPath("Services", "SystemInfoService.cs")));
 
         // Vacuity floor: the STATIC queries must still be here. An empty or mis-read file would satisfy every
         // absence below while proving nothing.
@@ -13406,7 +13406,7 @@ public partial class ArchitectureTests
 
         foreach (var (file, optionsName) in tempWalks)
         {
-            var code = WithoutComments(File.ReadAllText(Path.Combine(appDir, "Services", file)));
+            var code = WithoutComments(File.ReadAllText(TestPaths.AppPath("Services", file)));
             var declaration = BalancedBlock(code, $"SafeWalkOptions {optionsName} {{ get; }} = new()");
 
             Assert.True(declaration.Length > 20,
@@ -13458,7 +13458,7 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// Matches a <see cref="SysManager.Helpers.SafeFileWalk"/> call and captures its argument list. Bounded
+    /// Matches a <see cref="SysManager.Shared.Helpers.SafeFileWalk"/> call and captures its argument list. Bounded
     /// to argument lists without nested parentheses, which every temp-sweeping call site is.
     /// </summary>
     [GeneratedRegex(@"SafeFileWalk\s*\.\s*(?:Files|DirectoriesDeepestFirst)\s*\((?<args>[^()]*)\)")]
@@ -13600,7 +13600,7 @@ public partial class ArchitectureTests
         // if ThemeService published a literal instead — the same colour would be asserted against itself.
         // Reading the derivation out of the source is what closes that: a mutation setting ToggleThumb to
         // Colors.White passed every contrast theory and only this line caught it.
-        var service = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Services", "ThemeService.cs"));
+        var service = File.ReadAllText(TestPaths.AppPath("Services", "ThemeService.cs"));
         Assert.Contains("SetBrush(res, \"ToggleThumb\", OnColor(surface4));", service, StringComparison.Ordinal);
     }
 
@@ -13777,7 +13777,7 @@ public partial class ArchitectureTests
     {
         var appDir = TestPaths.AppProject();
         var appXaml = File.ReadAllText(Path.Combine(appDir, "App.xaml"));
-        var service = File.ReadAllText(Path.Combine(appDir, "Services", "ThemeService.cs"));
+        var service = File.ReadAllText(TestPaths.AppPath("Services", "ThemeService.cs"));
 
         Assert.Contains($"\"{token}\"", service, StringComparison.Ordinal);
         Assert.Contains($"{{DynamicResource {token}}}", appXaml, StringComparison.Ordinal);
@@ -13820,7 +13820,7 @@ public partial class ArchitectureTests
         Assert.Contains("{DynamicResource Accent}", neutral.Value, StringComparison.Ordinal);
 
         // System Logs filters by time range and by nothing else, so no chip there may carry a safety colour.
-        var logs = File.ReadAllText(Path.Combine(appDir, "Views", "LogsView.xaml"));
+        var logs = File.ReadAllText(TestPaths.AppPath("Views", "LogsView.xaml"));
         var chips = FilterChipUsage().Matches(logs).Cast<Match>()
             .Select(m => m.Groups["style"].Value)
             .ToList();
@@ -13855,7 +13855,7 @@ public partial class ArchitectureTests
     public void TheHostedPowerShell_OptsOutOfTelemetryInAStaticConstructor()
     {
         var runner = File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "Services", "PowerShellRunner.cs"));
+            TestPaths.AppPath("Services", "PowerShellRunner.cs"));
 
         Assert.Contains("static PowerShellRunner()", runner, StringComparison.Ordinal);
         Assert.Contains("POWERSHELL_TELEMETRY_OPTOUT", runner, StringComparison.Ordinal);
@@ -14048,8 +14048,7 @@ public partial class ArchitectureTests
     {
         // The other half. Routing every caller through App.RequestShutdown achieves nothing unless OnClosing
         // actually honours the flag it sets, and a source scan for the callers cannot see that.
-        var source = File.ReadAllText(Path.Combine(
-            TestPaths.RepoRoot(), "SysManager", "SysManager", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("MainWindow.xaml.cs"));
 
         var onClosing = source.IndexOf("protected override void OnClosing", StringComparison.Ordinal);
         Assert.True(onClosing > 0, "OnClosing not found — this guard would otherwise pass vacuously");
@@ -14117,7 +14116,7 @@ public partial class ArchitectureTests
 
         // The relaunch has to ask BEFORE it starts the elevated copy, because that copy then waits for this
         // instance to close. A question asked after it would leave the two waiting on each other.
-        var admin = string.Join('\n', File.ReadAllLines(Path.Combine(root, "Helpers", "AdminHelper.cs"))
+        var admin = string.Join('\n', File.ReadAllLines(TestPaths.AppPath("Helpers", "AdminHelper.cs"))
             .Select(line => CommentTail().Replace(line, string.Empty)));
         var relaunch = MethodSpans(admin).Single(s => s.Name == "RelaunchAsAdmin");
         var relaunchBody = admin[relaunch.Open..relaunch.End];
@@ -14149,7 +14148,7 @@ public partial class ArchitectureTests
     public void WingetCodes_AreWrittenAsNumbersOnlyInWingetExitCodes()
     {
         var appDir = TestPaths.AppProject();
-        var home = Path.Combine(appDir, "Models", "WingetResult.cs");
+        var home = TestPaths.AppPath("Models", "WingetResult.cs");
         Assert.True(File.Exists(home), "Models/WingetResult.cs was not found — the guard is named for it.");
 
         var scanned = 0;
@@ -14198,8 +14197,7 @@ public partial class ArchitectureTests
         //
         // Structural rather than behavioural because nothing in managed code can observe whether
         // FlushFileBuffers ran. What IS checkable is that the call is there and that it comes first.
-        var source = File.ReadAllText(Path.Combine(
-            TestPaths.RepoRoot(), "SysManager", "SysManager", "Helpers", "AtomicFile.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("Helpers", "AtomicFile.cs"));
 
         // Comments stripped BEFORE matching: the remarks explain FlushFileBuffers and reference Swap in
         // prose, and a guard that reads its own explanation passes on code that flushes nothing.
@@ -14512,8 +14510,7 @@ public partial class ArchitectureTests
         // SynchronizationContext, so their continuations resume on the pool and no dispatcher is
         // involved. GamingProfileService's bounded gate wait is sound for the reason its own source
         // states: all three of its acquisitions use ConfigureAwait(false).
-        var dir = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager", "ViewModels");
-        var files = Directory.GetFiles(dir, "*.cs");
+        var files = TestPaths.ViewModelFiles("*.cs").ToArray();
         Assert.NotEmpty(files);
 
         List<string> offenders = [];
@@ -14550,7 +14547,7 @@ public partial class ArchitectureTests
 
         // The permitted form is still there, and still inside the gate: deleting the clear entirely would
         // otherwise satisfy the assertion above while losing the protection.
-        var performance = File.ReadAllText(Path.Combine(dir, "PerformanceViewModel.cs"));
+        var performance = File.ReadAllText(TestPaths.AppPath("ViewModels", "PerformanceViewModel.cs"));
         Assert.Contains("_snapshotGate.Wait(0)", performance, StringComparison.Ordinal);
 
         // Positive control: the pattern has to recognise every blocking form and leave Wait(0) alone.
@@ -14905,7 +14902,7 @@ public partial class ArchitectureTests
                              + "rename. Pinned by CliRunnerTests.Parse_StillAcceptsTheFormerTrimRamSpelling",
         };
 
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Services", "CliRunner.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("Services", "CliRunner.cs"));
 
         // Only Parse's body. The file also contains the help catalog and the ExecuteAsync switch, and a
         // whole-file scan would read the catalog's own strings as case labels and pass vacuously.
@@ -15000,7 +14997,6 @@ public partial class ArchitectureTests
         // checked is a false claim sitting in the test suite.
         var cannotBePinnedYet = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var testsDir = Path.Combine(
             Directory.GetParent(TestPaths.AppProject())!.FullName, "SysManager.Tests");
 
@@ -15013,7 +15009,7 @@ public partial class ArchitectureTests
         var branching = 0;
         var offenders = new List<string>();
 
-        foreach (var path in Directory.GetFiles(vmDir, "*ViewModel.cs")
+        foreach (var path in TestPaths.ViewModelFiles("*ViewModel.cs").ToArray()
                      .OrderBy(p => p, StringComparer.Ordinal))
         {
             var name = Path.GetFileNameWithoutExtension(path);
@@ -15067,7 +15063,7 @@ public partial class ArchitectureTests
 
         // The exception list must not outlive what it excuses.
         var stale = cannotBePinnedYet.Keys
-            .Where(n => !File.Exists(Path.Combine(vmDir, n + ".cs")))
+            .Where(n => !File.Exists(TestPaths.AppPath("ViewModels", n + ".cs")))
             .OrderBy(n => n, StringComparer.Ordinal);
         Assert.Empty(stale);
     }
@@ -15183,7 +15179,7 @@ public partial class ArchitectureTests
     [InlineData("SpeedVerdict.cs", "SpeedVerdict")]              // a comment reaches "record" first
     public void TypeDeclaration_ReadsTheDeclaredName(string file, string expected)
     {
-        var path = Path.Combine(TestPaths.AppProject(), "Models", file);
+        var path = TestPaths.AppPath("Models", file);
         Assert.True(File.Exists(path),
             $"{file} is gone, so this case no longer covers anything — replace it with a model that has "
             + "the same declaration shape rather than deleting the row.");
@@ -15522,7 +15518,7 @@ public partial class ArchitectureTests
     [Fact]
     public void DeepCleanupsScan_TakesItsRootsFromTheSeam()
     {
-        var path = Path.Combine(TestPaths.AppProject(), "Services", "DeepCleanupService.cs");
+        var path = TestPaths.AppPath("Services", "DeepCleanupService.cs");
         Assert.True(File.Exists(path), $"DeepCleanupService.cs was not found at {path}");
         var source = WithoutComments(File.ReadAllText(path));
 
@@ -15575,7 +15571,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryFilteredCleanupBucket_IsFilteredInBothScanAndClean()
     {
-        var path = Path.Combine(TestPaths.AppProject(), "Services", "DeepCleanupService.cs");
+        var path = TestPaths.AppPath("Services", "DeepCleanupService.cs");
         Assert.True(File.Exists(path), $"DeepCleanupService.cs was not found at {path}");
         var source = WithoutComments(File.ReadAllText(path));
 
@@ -15631,11 +15627,10 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryCallerThatEndsTheShell_HoldsTheShellLock()
     {
-        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var callers = new List<string>();
         var unguarded = new List<string>();
 
-        foreach (var file in Directory.GetFiles(vmDir, "*.cs"))
+        foreach (var file in TestPaths.ViewModelFiles("*.cs").ToArray())
         {
             var source = WithoutComments(File.ReadAllText(file));
             // Stop() and Restart() END the shell; Start() on its own does not.
@@ -15679,7 +15674,7 @@ public partial class ArchitectureTests
     public void NothingKillsExplorer_OutsideTheSharedHelper()
     {
         var appDir = TestPaths.AppProject();
-        var helper = Path.Combine(appDir, "Helpers", "ExplorerShell.cs");
+        var helper = TestPaths.AppPath("Helpers", "ExplorerShell.cs");
         Assert.True(File.Exists(helper),
             $"{helper} not found — the shared shell helper is gone, so this guard would police nothing.");
 
@@ -15754,7 +15749,7 @@ public partial class ArchitectureTests
 
         foreach (var (fileName, invocations) in expectedInvocations)
         {
-            var vmPath = Path.Combine(TestPaths.AppProject(), "ViewModels", fileName);
+            var vmPath = TestPaths.AppPath("ViewModels", fileName);
             Assert.True(File.Exists(vmPath), $"{fileName} was not found at {vmPath}");
             var vm = WithoutComments(File.ReadAllText(vmPath));
 
@@ -15782,7 +15777,7 @@ public partial class ArchitectureTests
         foreach (var (viewName, commands) in expectedBindings)
         {
             var markup = WithoutXamlComments(
-                File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Views", viewName)));
+                File.ReadAllText(TestPaths.AppPath("Views", viewName)));
             markupByView[viewName] = markup;
             foreach (var command in commands)
             {
@@ -15827,7 +15822,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheCleanupWalk_AbandonsADirectoryWhoseEnumeratorThrows()
     {
-        var path = Path.Combine(TestPaths.AppProject(), "Helpers", "SafeFileWalk.cs");
+        var path = TestPaths.AppPath("Helpers", "SafeFileWalk.cs");
         Assert.True(File.Exists(path), $"SafeFileWalk.cs was not found at {path}");
         var source = WithoutComments(File.ReadAllText(path));
 
@@ -15992,7 +15987,7 @@ public partial class ArchitectureTests
     public void EveryReportFormat_GoesThroughTheRedactingDataPath()
     {
         var source = WithoutComments(File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "Services", "SystemReportService.cs")));
+            TestPaths.AppPath("Services", "SystemReportService.cs")));
 
         // The redaction has to be IN that path, not merely defined somewhere in the file.
         var dataPath = MemberSlice(source, "public async Task<SystemReportData> GenerateDataAsync");
@@ -16124,8 +16119,8 @@ public partial class ArchitectureTests
     public void TheBackupRetentionCopy_MatchesTheConstantItDescribes()
     {
         var appDir = TestPaths.AppProject();
-        var source = File.ReadAllText(Path.Combine(appDir, "Services", "ContextMenuService.cs"));
-        var view = XamlCode(Path.Combine(appDir, "Views", "ContextMenuView.xaml"));
+        var source = File.ReadAllText(TestPaths.AppPath("Services", "ContextMenuService.cs"));
+        var view = XamlCode(TestPaths.AppPath("Views", "ContextMenuView.xaml"));
 
         var declared = RetentionConstant().Match(source);
         Assert.True(declared.Success,
@@ -16165,12 +16160,11 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryChartOverlaidWithAnEmptyState_HidesItselfWhenEmpty()
     {
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
 
         var offenders = new List<string>();
         var pairs = 0;
 
-        foreach (var file in Directory.EnumerateFiles(viewsDir, "*.xaml"))
+        foreach (var file in TestPaths.ViewFiles("*.xaml"))
         {
             var xaml = XamlCode(file);
 
@@ -16375,7 +16369,7 @@ public partial class ArchitectureTests
     public void TheDocumentedSelectionCarryCallerCount_IsDerivedFromTheCallSites()
     {
         var appDir = TestPaths.AppProject();
-        var helper = Path.Combine(appDir, "Helpers", "SelectionCarry.cs");
+        var helper = TestPaths.AppPath("Helpers", "SelectionCarry.cs");
         Assert.True(File.Exists(helper), $"SelectionCarry.cs was not found at {helper}.");
 
         var tabs = 0;
@@ -16438,11 +16432,11 @@ public partial class ArchitectureTests
         // ARCHITECTURE's entry, sliced to its own bullet so a number under a neighbouring helper cannot vouch
         // for this one.
         var architecture = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "ARCHITECTURE.md"));
-        var entryAt = architecture.IndexOf("`Helpers/SelectionCarry`", StringComparison.Ordinal);
-        Assert.True(entryAt > 0, "ARCHITECTURE.md no longer has a `Helpers/SelectionCarry` entry, so the "
+        var entryAt = architecture.IndexOf("`Shared/Helpers/SelectionCarry`", StringComparison.Ordinal);
+        Assert.True(entryAt > 0, "ARCHITECTURE.md no longer has a `Shared/Helpers/SelectionCarry` entry, so the "
             + "counts below would be compared against nothing.");
         var after = architecture[entryAt..];
-        var nextEntry = after.IndexOf("\n- `Helpers/", StringComparison.Ordinal);
+        var nextEntry = after.IndexOf("\n- `Shared/Helpers/", StringComparison.Ordinal);
         var entry = Collapse(nextEntry > 0 ? after[..nextEntry] : after);
         Assert.True(entry.Length > 500,
             $"the SelectionCarry entry sliced to {entry.Length} chars — that is not the entry.");

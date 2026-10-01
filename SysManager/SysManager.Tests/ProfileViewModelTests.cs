@@ -3,8 +3,9 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.Profile;
+using SysManager.Shared.Services;
+using SysManager.Shell;
 
 namespace SysManager.Tests;
 

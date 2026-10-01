@@ -4,9 +4,9 @@
 
 using System.Collections.Concurrent;
 using System.ComponentModel;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.ProcessManager;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

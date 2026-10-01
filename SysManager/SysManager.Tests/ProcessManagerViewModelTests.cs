@@ -5,10 +5,10 @@
 using System.IO;
 using System.Text.RegularExpressions;
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.ProcessManager;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -24,7 +24,7 @@ public class ProcessManagerViewModelTests
     [Fact]
     public void Constructor_Commands_Exist()
     {
-        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
+        var vm = new ProcessManagerViewModel(new ProcessManagerService());
         Assert.NotNull(vm.RefreshCommand);
         Assert.NotNull(vm.KillProcessCommand);
         Assert.NotNull(vm.OpenFileLocationCommand);
@@ -33,7 +33,7 @@ public class ProcessManagerViewModelTests
     [Fact]
     public void Constructor_Collections_NotNull()
     {
-        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
+        var vm = new ProcessManagerViewModel(new ProcessManagerService());
         Assert.NotNull(vm.Processes);
         Assert.NotNull(vm.FilteredProcesses);
     }
@@ -41,7 +41,7 @@ public class ProcessManagerViewModelTests
     [Fact]
     public void FilterText_DefaultEmpty()
     {
-        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
+        var vm = new ProcessManagerViewModel(new ProcessManagerService());
         Assert.Equal("", vm.FilterText);
     }
 
@@ -58,7 +58,7 @@ public class ProcessManagerViewModelTests
     [Fact]
     public void FilterText_NarrowsTheBoundList()
     {
-        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
+        var vm = new ProcessManagerViewModel(new ProcessManagerService());
         vm.Processes.Clear();
         vm.Processes.Add(new ProcessEntry { Pid = 1, Name = "chrome", MemoryBytes = 300 });
         vm.Processes.Add(new ProcessEntry { Pid = 2, Name = "notepad", MemoryBytes = 200 });
@@ -79,7 +79,7 @@ public class ProcessManagerViewModelTests
     [Fact]
     public void FilterText_AlsoMatchesPidAndDescription()
     {
-        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
+        var vm = new ProcessManagerViewModel(new ProcessManagerService());
         vm.Processes.Clear();
         vm.Processes.Add(new ProcessEntry { Pid = 4321, Name = "svchost", PlainDescription = "Windows service host" });
         vm.Processes.Add(new ProcessEntry { Pid = 9, Name = "notepad" });
@@ -94,7 +94,7 @@ public class ProcessManagerViewModelTests
     [Fact]
     public void Summary_HasDefaultValue()
     {
-        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService());
+        var vm = new ProcessManagerViewModel(new ProcessManagerService());
         Assert.False(string.IsNullOrEmpty(vm.Summary));
     }
 

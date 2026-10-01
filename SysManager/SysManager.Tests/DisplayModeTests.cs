@@ -2,7 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Models;
+using SysManager.Features.DisplayProfile;
+using SysManager.Features.DisplayProfile.Models;
 
 namespace SysManager.Tests;
 

@@ -1,7 +1,7 @@
 // SysManager · LogServiceSanitizeEdgeCaseTests
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
-using SysManager.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

@@ -4,7 +4,7 @@
 
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
-using SysManager.Helpers;
+using SysManager.Shared.Helpers;
 
 namespace SysManager.Tests;
 
@@ -209,7 +209,7 @@ public class AuthenticodeTests
     [Fact]
     public void TheInformationalPath_DoesNotBuildAManagedChain()
     {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Helpers", "SignatureVerdict.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("Helpers", "SignatureVerdict.cs"));
         Assert.True(source.Length > 1000, "SignatureVerdict.cs is too small to be the real file");
 
         Assert.Contains("WindowsTrust.Verify(path)", source, StringComparison.Ordinal);
@@ -226,7 +226,7 @@ public class AuthenticodeTests
 
     private static string HelperMethodSource(string signature)
     {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Helpers", "Authenticode.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("Helpers", "Authenticode.cs"));
         var start = source.IndexOf(signature, StringComparison.Ordinal);
         Assert.True(start >= 0, $"'{signature}' not found in Helpers/Authenticode.cs — this test would "
             + "otherwise assert nothing at all");

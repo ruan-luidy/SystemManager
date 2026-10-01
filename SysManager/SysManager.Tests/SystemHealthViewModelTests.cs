@@ -3,9 +3,10 @@
 // License: MIT
 
 using System.Reflection;
-using SysManager.Helpers;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.SystemHealth;
+using SysManager.Features.SystemHealth.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

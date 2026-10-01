@@ -4,10 +4,9 @@
 
 using System.Windows;
 using System.Windows.Controls;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
-using SysManager.Views;
+using SysManager.Features.AppBlocker;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 

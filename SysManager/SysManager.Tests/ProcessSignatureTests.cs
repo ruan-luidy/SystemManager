@@ -3,9 +3,10 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.ProcessManager;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -257,7 +258,7 @@ public class ProcessSignatureTests
         // What a refresh actually hands over for a PID it already tracks: metrics, no path, no verdict.
         var fresh = new ProcessEntry { Pid = 4242, Name = "chrome", StartTime = started, MemoryBytes = 250 };
 
-        ViewModels.ProcessManagerViewModel.ReconcileInto(target, [fresh]);
+        ProcessManagerViewModel.ReconcileInto(target, [fresh]);
 
         var row = Assert.Single(target);
         Assert.Same(tracked, row);
@@ -289,7 +290,7 @@ public class ProcessSignatureTests
             StartTime = new DateTime(2026, 9, 10, 9, 30, 0, DateTimeKind.Utc),
         };
 
-        ViewModels.ProcessManagerViewModel.ReconcileInto(target, [reused]);
+        ProcessManagerViewModel.ReconcileInto(target, [reused]);
 
         var row = Assert.Single(target);
         Assert.Same(reused, row);

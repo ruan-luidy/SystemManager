@@ -3,7 +3,7 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Helpers;
+using SysManager.Shared.Helpers;
 
 namespace SysManager.Tests;
 
@@ -137,7 +137,7 @@ public class WindowsTrustTests
     [Fact]
     public void AFileWithNoEmbeddedSignature_IsAlsoCheckedAgainstTheCatalogs()
     {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Helpers", "WindowsTrust.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("Helpers", "WindowsTrust.cs"));
         Assert.True(source.Length > 3000, "WindowsTrust.cs is too small to be the real file");
 
         // The fallback happens, and only on the no-signature answer.
@@ -200,7 +200,7 @@ public class WindowsTrustTests
     [Fact]
     public void TheTrustCall_AsksForNoNetwork()
     {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Helpers", "WindowsTrust.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("Helpers", "WindowsTrust.cs"));
         Assert.True(source.Length > 2000, "WindowsTrust.cs is too small to be the real file");
 
         // Revocation off: a lookup per file is what a list cannot afford.

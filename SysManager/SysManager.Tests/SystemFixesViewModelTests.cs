@@ -6,10 +6,11 @@ using System.Collections.ObjectModel;
 using System.Management.Automation;
 using System.Reflection;
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.SystemFixes;
+using SysManager.Features.SystemFixes.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

@@ -5,8 +5,8 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using SysManager.ViewModels;
-using SysManager.Views;
+using SysManager.Features.About;
+using SysManager.Shell;
 
 namespace SysManager.IntegrationTests;
 

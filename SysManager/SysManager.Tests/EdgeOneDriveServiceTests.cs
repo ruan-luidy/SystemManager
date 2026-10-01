@@ -8,7 +8,9 @@ using System.IO;
 using System.Management.Automation;
 using Microsoft.Win32;
 using NSubstitute;
-using SysManager.Services;
+using SysManager.Features.EdgeOneDrive;
+using SysManager.Features.EdgeOneDrive.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

@@ -3,6 +3,7 @@
 // License: MIT
 
 using FlaUI.Core.AutomationElements;
+using SysManager.Shell;
 
 namespace SysManager.UITests;
 

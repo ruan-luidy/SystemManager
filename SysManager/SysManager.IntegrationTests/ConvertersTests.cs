@@ -5,7 +5,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
-using SysManager.Helpers;
+using SysManager.Shared.Helpers;
 
 namespace SysManager.IntegrationTests;
 

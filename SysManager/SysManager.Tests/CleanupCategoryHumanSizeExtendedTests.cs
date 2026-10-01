@@ -1,8 +1,8 @@
 // SysManager · CleanupCategoryHumanSizeExtendedTests
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
-using SysManager.Helpers;
-using SysManager.Models;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
 
 namespace SysManager.Tests;
 

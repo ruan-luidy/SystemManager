@@ -319,7 +319,7 @@ public class SecurityPromiseTests
 
     private static string CodeOf(params string[] parts)
     {
-        var path = Path.Combine([TestPaths.AppProject(), .. parts]);
+        var path = TestPaths.AppPath(parts);
         Assert.True(File.Exists(path), $"{string.Join('/', parts)} not found at {path}");
         return StripComments(File.ReadAllText(path));
     }

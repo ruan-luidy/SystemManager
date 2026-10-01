@@ -5,7 +5,7 @@
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using SysManager.Helpers;
+using SysManager.Shared.Helpers;
 
 namespace SysManager.Tests;
 

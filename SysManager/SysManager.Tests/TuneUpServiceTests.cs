@@ -3,9 +3,9 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -168,7 +168,7 @@ public class TuneUpServiceTests
         // Asserted at source level deliberately. The runtime value depends on this machine's actual
         // drives, so a behavioural test would be non-deterministic across machines and would pass
         // vacuously on a box whose disks report no SMART counters. The property NAME is the contract.
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Services", "TuneUpService.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("Services", "TuneUpService.cs"));
 
         Assert.Contains("Verdict = r.Verdict", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Verdict = r.HealthStatus", source, StringComparison.Ordinal);

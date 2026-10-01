@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Services;
+using SysManager.Features.BandwidthMonitor;
+using SysManager.Features.BandwidthMonitor.Services;
+using SysManager.Shared.Helpers;
 
 namespace SysManager.Tests;
 
@@ -218,7 +220,7 @@ public class EtwBandwidthSourceTests
     [Fact]
     public void Start_WithoutAdministrator_RefusesCleanly()
     {
-        using var notElevated = Helpers.AdminHelper.ForceElevation(false);
+        using var notElevated = AdminHelper.ForceElevation(false);
         var clock = new TestClock();
         using var src = new EtwBandwidthSource(clock);
 

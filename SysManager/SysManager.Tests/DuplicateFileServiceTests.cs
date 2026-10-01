@@ -4,8 +4,9 @@
 
 using System.IO;
 using System.Reflection;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.DuplicateFile;
+using SysManager.Features.DuplicateFile.Models;
+using SysManager.Features.DuplicateFile.Services;
 
 namespace SysManager.Tests;
 

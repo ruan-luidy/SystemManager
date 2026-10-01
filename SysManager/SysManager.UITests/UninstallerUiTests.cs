@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Shared.Helpers;
+
 namespace SysManager.UITests;
 
 [Collection("App")]
@@ -40,7 +42,7 @@ public class UninstallerUiTests
         // grows one.
         Assert.False(_fixture.HasButtonWithName("Run as administrator"));
 
-        var elevated = Helpers.AdminHelper.IsElevated();
+        var elevated = AdminHelper.IsElevated();
         var expectedGuidance = elevated
             ? "Uninstalling is turned off while SysManager runs as administrator"
             : "Uninstallers request administrator access themselves when needed";

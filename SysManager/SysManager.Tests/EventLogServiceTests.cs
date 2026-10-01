@@ -4,8 +4,10 @@
 
 using System.Diagnostics.Eventing.Reader;
 using System.Reflection;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.Logs;
+using SysManager.Features.Logs.Models;
+using SysManager.Features.Logs.Services;
+using SysManager.Shared.Models;
 
 namespace SysManager.Tests;
 

@@ -1,0 +1,98 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Features.RestorePoints.RestorePointsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SysManager.Features.RestorePoints"
+             xmlns:v="clr-namespace:SysManager.Shared.Controls"
+             d:DataContext="{d:DesignInstance vm:RestorePointsViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{DynamicResource Surface0}">
+
+    <Grid Margin="28,24,28,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Restore Points" Style="{StaticResource Display}"/>
+            <TextBlock Text="List, create, and restore Windows System Restore points. All three need administrator rights; restoring restarts Windows to roll the system back."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Elevation banner -->
+        <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
+                       NotElevatedMessage="Listing, creating and restoring restore points all need administrator privileges. Windows does not show the list to a standard user."
+                       ElevatedMessage="Running as administrator — you can list, create and restore restore points."/>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <WrapPanel>
+                <Grid Width="240" Margin="0,0,8,0">
+                    <TextBox Text="{Binding NewDescription, UpdateSourceTrigger=PropertyChanged}"
+                             AutomationProperties.Name="New restore point description"
+                             VerticalContentAlignment="Center"
+                             ToolTip="Optional description for the new restore point."/>
+                    <TextBlock Text="Describe this restore point…" IsHitTestVisible="False"
+                               Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
+                               VerticalAlignment="Center" Style="{StaticResource Subtle}"
+                               Visibility="{Binding NewDescription, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                </Grid>
+                <Button Content="Create restore point" Command="{Binding CreateCommand}"
+                        AutomationProperties.Name="Create restore point"
+                        Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
+                        ToolTip="Create a new System Restore point (admin; once per 24h)."/>
+                <Button Content="Refresh" Command="{Binding RefreshCommand}"
+                        AutomationProperties.Name="Refresh restore point list"
+                        Style="{StaticResource GhostButton}" Margin="0,0,8,0"
+                        ToolTip="Re-read the list of restore points."/>
+                <Button Content="Cancel" Command="{Binding CancelCommand}"
+                        AutomationProperties.Name="Cancel current operation"
+                        Style="{StaticResource GhostButton}" Margin="0,0,16,0"
+                        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+
+                <Button Content="Restore selected…" Command="{Binding RestoreCommand}"
+                        AutomationProperties.Name="Restore selected… — the selected restore point"
+                        Style="{StaticResource DangerButton}"
+                        ToolTip="Roll the system back to the selected restore point (restarts Windows)."/>
+            </WrapPanel>
+        </Border>
+
+        <!-- Restore points grid -->
+        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
+            <Grid>
+                <DataGrid ItemsSource="{Binding RestorePoints}"
+                          SelectedItem="{Binding SelectedPoint}"
+                          AutomationProperties.Name="Restore points"
+                          AutoGenerateColumns="False" HeadersVisibility="Column"
+                          CanUserAddRows="False" IsReadOnly="True" SelectionMode="Single"
+                          Background="Transparent" BorderThickness="0"
+                          GridLinesVisibility="None"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="#" Binding="{Binding SequenceNumber}" Width="60"/>
+                        <DataGridTextColumn Header="Created" Binding="{Binding CreatedDisplay}" Width="150"/>
+                        <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*"/>
+                        <DataGridTextColumn Header="Type" Binding="{Binding TypeDisplay}" Width="160"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <!-- Empty state -->
+                <v:EmptyState Glyph="&#xE777;"
+                              Title="{Binding EmptyTitle}"
+                              Message="{Binding EmptyMessage}"
+                              Visibility="{Binding HasPoints, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
+        </Border>
+
+        <!-- Status bar -->
+        <v:StatusFooter Grid.Row="4" Margin="0,8,0,0" ProgressName="Restore point progress"/>
+    </Grid>
+</UserControl>

@@ -1,0 +1,497 @@
+// SysManager · DiskAnalyzerViewModel — disk space breakdown
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.IO;
+using System.Text;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
+using Serilog;
+using SysManager.Features.DiskAnalyzer.Models;
+using SysManager.Features.DiskAnalyzer.Services;
+using SysManager.Shared;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Services;
+
+namespace SysManager.Features.DiskAnalyzer;
+
+/// <summary>
+/// Disk Analyzer tab — shows space breakdown by top-level folders.
+/// Read-only: only "Show in Explorer" is offered.
+/// </summary>
+public sealed partial class DiskAnalyzerViewModel : ViewModelBase
+{
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelAnalysisCommand : null;
+
+    private readonly DiskAnalyzerService _service;
+    private readonly DiskScanHistoryService _history;
+    private CancellationTokenSource? _cts;
+
+    public BulkObservableCollection<DiskUsageEntry> Entries { get; } = new();
+    public ObservableCollection<string> PresetPaths { get; } = new();
+
+    [ObservableProperty] private string _selectedPath = "";
+    [ObservableProperty] private string _scanSummary = "Select a drive or folder and click Analyze.";
+
+    /// <summary>
+    /// The per-folder line shown beside the status line while a scan runs — and NOT announced.
+    /// </summary>
+    /// <remarks>
+    /// The scan reports once per top-level subfolder with no rate limit, and that value used to go straight
+    /// into <c>StatusMessage</c>, which the footer renders as a live region. Analysing a folder with hundreds
+    /// of small children announced hundreds of sentences in a few seconds and a screen reader finished none
+    /// of them, so the tab said less the more there was to say (#2274).
+    /// <para>Split exactly as Duplicate Finder's was in #2143: the status line keeps the coarse "Analyzing…"
+    /// that the command sets at the phase boundaries, and the fast half lives here. Named
+    /// <c>ScanReadout</c> to match that tab deliberately — same role, same name, one entry covering both in
+    /// the guard that asserts these stay silent.</para>
+    /// </remarks>
+    [ObservableProperty] private string _scanReadout = "";
+
+    /// <summary>
+    /// The full path of the folder being measured, for the readout's hover. Also silent.
+    /// </summary>
+    /// <remarks>
+    /// The readout trims to a name because the counts plus a deep path exceed the row at a small window
+    /// size, so the path needs somewhere to go. Mirrors <c>CurrentFile</c> on Duplicate Finder.
+    /// </remarks>
+    [ObservableProperty] private string _currentFolder = "";
+
+    // The delta line: "3.2 GB larger than your last scan on 12 Jul", or empty when this root has no
+    // remembered scan yet. Explicitly "since last scan", never framed as continuous monitoring — the
+    // sampling is user-triggered and irregular. Empty string keeps the row collapsed (see the view).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTrend))]
+    private string _trendSummary = "";
+
+    public bool HasTrend => !string.IsNullOrEmpty(TrendSummary);
+    [ObservableProperty] private long _totalSize;
+    [ObservableProperty] private int _totalFiles;
+    [ObservableProperty] private int _entryCount;
+
+    // Distinguishes the un-run state from a completed zero-result scan so the big empty-state overlay
+    // doesn't tell the user to "pick a folder and analyze" right after they did exactly that. Set true
+    // only after a scan actually completes (see AnalyzeAsync); a cancelled/failed scan leaves it as-is.
+    // Mirrors DuplicateFileViewModel, the sibling tab in the same Storage group.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private bool _hasScanned;
+
+    // Why the last analysis could not measure the folder at all. It used to arrive as an empty result, reported as a
+    // finished scan with no subfolders and saved as the folder's latest scan (#2504).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private DiskAnalyzerService.AnalysisFailure _lastFailure;
+
+    public string EmptyTitle => LastFailure != DiskAnalyzerService.AnalysisFailure.None
+        ? "This folder could not be measured"
+        : HasScanned ? "Nothing to show" : "No results yet";
+
+    public string EmptyMessage => LastFailure != DiskAnalyzerService.AnalysisFailure.None
+        ? DescribeFailure(LastFailure)
+        : HasScanned
+            ? "This folder has no subfolders using measurable space."
+            : "Pick a folder and analyze to see what's using space.";
+
+    /// <summary>What to tell the user when the chosen folder could not be measured. Pure, so each case is testable.</summary>
+    internal static string DescribeFailure(DiskAnalyzerService.AnalysisFailure failure) => failure switch
+    {
+        DiskAnalyzerService.AnalysisFailure.NotFound =>
+            "It no longer exists. Pick it again, or reconnect the drive it was on.",
+        DiskAnalyzerService.AnalysisFailure.IsLink =>
+            "It is a link to another location, or its details could not be read, so SysManager does not measure it. "
+            + "Pick the folder it points to instead.",
+        DiskAnalyzerService.AnalysisFailure.Unreadable =>
+            "Windows did not let SysManager list what is in it. Try Run as administrator, or pick another folder.",
+        _ => "",
+    };
+
+    // Drive-level info
+    [ObservableProperty] private long _driveTotal;
+    [ObservableProperty] private long _driveFree;
+    [ObservableProperty] private long _driveUsed;
+    [ObservableProperty] private double _driveUsedPercent;
+    [ObservableProperty] private bool _hasDriveInfo;
+
+    /// <summary>
+    /// Says that the total is partial by design. Without this the user compares it against the free
+    /// space Windows reports, finds a multi-gigabyte gap — <c>Windows\WinSxS</c> alone is routinely
+    /// several GB — and has no way to learn the difference is intentional.
+    /// </summary>
+    /// <remarks>
+    /// Instance, not static, even though the value never varies: a <c>{Binding}</c> to a static member
+    /// resolves to nothing and renders EMPTY, which would reintroduce the very silence this fixes.
+    /// (Nothing in Views/ uses <c>x:Static</c>, so an instance property is also the uniform choice.)
+    /// </remarks>
+    public string ExclusionNote =>
+        "Windows system areas and shortcut-links (junctions) aren't counted, so this total can be " +
+        "smaller than the space Windows reports.";
+
+    /// <summary>The exact excluded folders, for the curious — derived from the service's own list.</summary>
+    public string ExclusionDetail =>
+        "Not counted: " + string.Join(", ", DiskAnalyzerService.ExcludedFolderNames) +
+        ", plus any junction or symbolic link (following one would double-count, or lead outside the " +
+        "folder you asked about).";
+
+    public DiskAnalyzerViewModel(DiskAnalyzerService service, DiskScanHistoryService history)
+    {
+        _service = service;
+        _history = history;
+        // Probe drives off the UI thread: DriveInfo.IsReady can stall on a disconnected
+        // mapped/removable volume. This tab is LAZY — NavItem.ContentFactory builds it on first open,
+        // not at startup (the eager set is Dashboard, DarkMode and About; see the list above
+        // NavItems) — so the stall this avoids is on the first navigation into the tab, not at app
+        // launch. The Task.Run is still required either way; the collection update runs back on the
+        // UI thread.
+        InitializeAsync(PopulatePresetsAsync);
+    }
+
+    private async Task PopulatePresetsAsync()
+    {
+        var paths = await Task.Run(EnumeratePresetPaths).ConfigureAwait(true);
+        foreach (var p in paths)
+            PresetPaths.Add(p);
+        if (PresetPaths.Count > 0)
+            SelectedPath = PresetPaths[0];
+    }
+
+    private static List<string> EnumeratePresetPaths()
+    {
+        var result = new List<string>();
+        foreach (var d in DriveInfo.GetDrives().Where(x => x.DriveType == DriveType.Fixed && x.IsReady))
+            result.Add(d.RootDirectory.FullName);
+
+        string[] special =
+        [
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+        ];
+        foreach (var p in special.Where(x => !string.IsNullOrEmpty(x) && Directory.Exists(x) && !result.Contains(x)))
+            result.Add(p);
+
+        return result;
+    }
+
+    [RelayCommand]
+    private async Task AnalyzeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedPath)) return;
+
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Disk Analysis");
+        if (opLock is null)
+        {
+            ScanSummary = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
+            return;
+        }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var ct = _cts.Token;
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Analyzing…";
+        TrendSummary = "";
+        LastFailure = DiskAnalyzerService.AnalysisFailure.None;
+        Entries.Clear();
+        TotalSize = 0;
+        TotalFiles = 0;
+        EntryCount = 0;
+
+        UpdateDriveInfo();
+
+        try
+        {
+            // Writes the SILENT half only. StatusMessage is set at the phase boundaries — "Analyzing…" above,
+            // and the outcome below — so the announced line changes twice per scan instead of once per
+            // folder. See ScanReadout for what over-announcing did here.
+            var progress = new SettlingProgress<DiskAnalyzerService.AnalysisProgress>(ApplyScanProgress);
+
+            var analysis = await progress.SettleAfterAsync(
+                reporter => _service.AnalyzeAsync(SelectedPath, reporter, ct));
+
+            if (analysis.Failure != DiskAnalyzerService.AnalysisFailure.None)
+            {
+                // Not a scan: nothing is recorded as this folder's latest, and nothing says "complete" (#2504).
+                LastFailure = analysis.Failure;
+                ScanSummary = "This folder could not be measured.";
+                StatusMessage = $"This folder could not be measured. {DescribeFailure(analysis.Failure)}";
+                return;
+            }
+
+            Entries.ReplaceWith(analysis.Entries);
+
+            EntryCount = Entries.Count;
+            TotalSize = Entries.Sum(e => e.SizeBytes);
+            TotalFiles = Entries.Sum(e => e.FileCount);
+
+            ScanSummary = EntryCount == 0
+                ? "No subfolders found."
+                : string.Create(CultureInfo.InvariantCulture, $"{EntryCount} folders · {FormatSize(TotalSize)} total · {TotalFiles:N0} files");
+            HasScanned = true;
+            await UpdateTrendAndRememberAsync(SelectedPath, ct).ConfigureAwait(true);
+            StatusMessage = "Analysis complete.";
+            ToastService.Instance.Show("Disk Analysis complete", $"{EntryCount} folders, {FormatSize(TotalSize)} total");
+            Log.Information("Disk analysis completed: {Folders} folders, {Size} total",
+                EntryCount, FormatSize(TotalSize));
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Analysis cancelled.";
+        }
+        catch (IOException ex)
+        {
+            StatusMessage = $"Analysis failed: {ex.Message}";
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            StatusMessage = $"Analysis failed: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            IsProgressIndeterminate = false;
+            // Both belong to the run that just ended, however it ended. Leaving them would strand the last
+            // folder's name under a finished scan.
+            ScanReadout = "";
+            CurrentFolder = "";
+        }
+    }
+
+    /// <summary>
+    /// Applies one progress report to the two silent readouts. Deliberately does not touch
+    /// <see cref="ViewModelBase.StatusMessage"/> — see <see cref="ScanReadout"/>.
+    /// </summary>
+    /// <remarks>
+    /// A named method rather than a lambda so the split is testable without driving a real scan, matching
+    /// <c>DuplicateFileViewModel.ApplyScanProgress</c>.
+    /// </remarks>
+    internal void ApplyScanProgress(DiskAnalyzerService.AnalysisProgress p)
+    {
+        // The settling report carries no folder: it exists to deliver the final count, and rendering it
+        // would put a bare separator under a scan that has finished.
+        if (string.IsNullOrEmpty(p.CurrentFolder))
+        {
+            ScanReadout = "";
+            CurrentFolder = "";
+            return;
+        }
+
+        CurrentFolder = p.CurrentFolder;
+
+        // Falls back to the whole path when the leaf is empty, which is what the service does when it builds
+        // the entry's own Name — a path ending in a separator would otherwise show the count and a separator
+        // with nothing after it.
+        var leaf = Path.GetFileName(p.CurrentFolder);
+        if (string.IsNullOrEmpty(leaf)) leaf = p.CurrentFolder;
+
+        ScanReadout = string.Create(CultureInfo.InvariantCulture,
+            $"{p.FoldersScanned:N0} folders measured · {leaf}");
+    }
+
+    /// <summary>
+    /// Reads the remembered scan of <paramref name="root"/> to show what changed, then remembers this
+    /// scan in its place. Deliberately swallows its own failures: the scan has already completed and its
+    /// results are on screen, so a history read/write problem must degrade to "no trend line", never to a
+    /// broken tab. That is the same never-throw-to-the-caller contract the history service keeps
+    /// internally; this is the second half of it, at the call site.
+    /// </summary>
+    private async Task UpdateTrendAndRememberAsync(string root, CancellationToken ct)
+    {
+        try
+        {
+            var (readable, previous) = await _history.FindAsync(root, ct).ConfigureAwait(true);
+            // Without the earlier scans there is nothing to compare with, and an empty line would read as a first
+            // scan. The save below then refuses too, rather than replace them with this one (#2521).
+            TrendSummary = readable ? DescribeTrend(previous, TotalSize) : HistoryUnreadable;
+
+            var snapshot = new DiskScanSnapshot
+            {
+                RootPath = root,
+                CapturedAt = DateTime.Now,
+                TotalSize = TotalSize,
+                TopFolders = Entries
+                    .Select(e => new FolderUsage { Name = e.Name, SizeBytes = e.SizeBytes })
+                    .ToList(),
+            };
+            await _history.SaveAsync(snapshot, ct).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            // The tab closed between the scan finishing and this running — nothing to record.
+        }
+    }
+
+    /// <summary>The trend line when the earlier scans could not be read.</summary>
+    internal const string HistoryUnreadable =
+        "Your earlier scans could not be read, so this one could not be compared with them.";
+
+    /// <summary>
+    /// The one-line "since last scan" delta. Returns empty when this root has never been scanned, so a
+    /// first-ever scan shows no trend rather than a misleading "0 bytes larger". A change smaller than a
+    /// tenth of a percent reads as "about the same" rather than a spurious few-kilobyte delta.
+    /// </summary>
+    internal static string DescribeTrend(DiskScanSnapshot? previous, long currentTotal)
+    {
+        if (previous is null) return "";
+
+        var on = previous.CapturedAt.ToString("d MMM yyyy", CultureInfo.CurrentCulture);
+        var delta = currentTotal - previous.TotalSize;
+        var magnitude = Math.Abs(delta);
+
+        // Below 0.1% of the previous total (and at least a token 1 MB) counts as unchanged, so ordinary
+        // churn does not read as growth.
+        var threshold = Math.Max(1L * 1024 * 1024, previous.TotalSize / 1000);
+        if (magnitude < threshold)
+            return $"About the same as your last scan on {on}.";
+
+        var direction = delta > 0 ? "larger" : "smaller";
+        return $"{FormatSize(magnitude)} {direction} than your last scan on {on}.";
+    }
+
+    [RelayCommand]
+    private void CancelAnalysis() => _cts?.Cancel();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _cts?.Cancel();
+            _cts?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+
+    [RelayCommand]
+    private static void ShowInExplorer(DiskUsageEntry? entry)
+    {
+        if (entry is null) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = SysManager.Shared.Helpers.SystemPaths.ResolveSystemTool("explorer.exe"),
+                Arguments = $"\"{entry.FullPath}\"",
+                UseShellExecute = true
+            })?.Dispose();
+        }
+        catch (InvalidOperationException ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.FullPath); }
+        catch (System.ComponentModel.Win32Exception ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.FullPath); }
+    }
+
+    [RelayCommand]
+    private async Task DrillDown(DiskUsageEntry? entry)
+    {
+        if (entry is null || entry.Name == "(files in root)") return;
+        SelectedPath = entry.FullPath;
+        if (!PresetPaths.Contains(entry.FullPath))
+            PresetPaths.Add(entry.FullPath);
+        await AnalyzeAsync();
+    }
+
+    /// <summary>Whether there is a breakdown worth exporting.</summary>
+    /// <remarks>
+    /// Derived from <see cref="EntryCount"/> rather than being a second flag, so it cannot disagree with the
+    /// number the tab displays. <c>OnEntryCountChanged</c> below is what makes the button follow it.
+    /// </remarks>
+    public bool HasEntries => EntryCount > 0;
+
+    /// <summary>
+    /// Writes the folder-size breakdown to a CSV the user picks a location for.
+    /// </summary>
+    /// <remarks>
+    /// A scan of a large drive takes minutes and produced a number the user could only read on screen, so
+    /// comparing "before" with "after a cleanup" meant running it twice and remembering. The export carries
+    /// both the formatted size and the raw byte count, because "9.8 GB" sorts below "10 MB" as text.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasEntries))]
+    private async Task ExportCsvAsync()
+    {
+        var dlg = new SaveFileDialog
+        {
+            FileName = $"SysManager-DiskUsage-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
+            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var csv = DiskAnalyzerService.ToCsv(Entries);
+            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            StatusMessage = $"Exported {Entries.Count} folder(s) to {Path.GetFileName(dlg.FileName)}.";
+            ToastService.Instance.Show("Disk usage exported", Path.GetFileName(dlg.FileName));
+        }
+        catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
+    }
+
+    partial void OnEntryCountChanged(int value)
+    {
+        OnPropertyChanged(nameof(HasEntries));
+        ExportCsvCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand]
+    private async Task GoUp()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedPath)) return;
+        var parent = Directory.GetParent(SelectedPath);
+        if (parent is not null)
+        {
+            SelectedPath = parent.FullName;
+            await AnalyzeAsync();
+        }
+    }
+
+    [RelayCommand]
+    private void BrowseFolder()
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Select folder to analyze"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            SelectedPath = dialog.FolderName;
+            if (!PresetPaths.Contains(SelectedPath))
+                PresetPaths.Add(SelectedPath);
+        }
+    }
+
+    private void UpdateDriveInfo()
+    {
+        try
+        {
+            var root = Path.GetPathRoot(SelectedPath);
+            if (!string.IsNullOrEmpty(root))
+            {
+                var di = new DriveInfo(root);
+                if (di.IsReady)
+                {
+                    DriveTotal = di.TotalSize;
+                    DriveFree = di.AvailableFreeSpace;
+                    DriveUsed = DriveTotal - DriveFree;
+                    DriveUsedPercent = DriveTotal > 0
+                        ? Math.Round(DriveUsed * 100.0 / DriveTotal, 1)
+                        : 0;
+                    HasDriveInfo = true;
+                    return;
+                }
+            }
+        }
+        catch (IOException ex) { Log.Debug(ex, "Failed to read drive info for {Path}", SelectedPath); }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied reading drive info for {Path}", SelectedPath); }
+        HasDriveInfo = false;
+    }
+
+    private static string FormatSize(long bytes) => FormatHelper.FormatSize(bytes);
+}

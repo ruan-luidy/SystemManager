@@ -3,12 +3,15 @@
 // License: MIT
 
 using NSubstitute;
-using SysManager.ViewModels;
+using SysManager.Features.SpeedTest;
+using SysManager.Shared;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
 /// <summary>
-/// Every VM here is built with a <see cref="Services.SpeedTestHistoryService"/> pointed at a throwaway
+/// Every VM here is built with a <see cref="SpeedTestHistoryService"/> pointed at a throwaway
 /// directory. The VM constructor kicks off <c>LoadHistoryAsync</c>, so before the service gained its
 /// <c>configDir</c> seam these tests READ the user's real speedtest-history.json — and their results
 /// depended on whatever that file happened to contain.
@@ -34,12 +37,12 @@ public sealed class SpeedTestViewModelTests : IDisposable
     }
 
     private static NetworkSharedState NewShared() => new(
-        new Services.PingMonitorService(), new Services.TracerouteService(),
-        new Services.TracerouteMonitorService(), new Services.SpeedTestService(),
-        new Services.NetworkRepairService(new Services.PowerShellRunner()));
+        new PingMonitorService(), new TracerouteService(),
+        new TracerouteMonitorService(), new SpeedTestService(),
+        new NetworkRepairService(new PowerShellRunner()));
 
     /// <summary>History service scoped to this test's temp directory — never the real profile.</summary>
-    private Services.SpeedTestHistoryService NewHistory() => new(_dir);
+    private SpeedTestHistoryService NewHistory() => new(_dir);
 
     [Fact]
     public void Constructor_SetsShared()
@@ -135,7 +138,7 @@ public sealed class SpeedTestViewModelTests : IDisposable
 
     // ---------- results saved elsewhere reach the list on screen ----------
 
-    private static Models.SpeedTestResult At(string engine, int minute)
+    private static SpeedTestResult At(string engine, int minute)
         => new(engine, 100 + minute, 20, 10, "server", new DateTime(2026, 9, 25, 10, minute, 0));
 
     [Fact]
@@ -175,11 +178,11 @@ public sealed class SpeedTestViewModelTests : IDisposable
         var vm = new SpeedTestViewModel(NewShared(), NewHistory());
         await vm.InitializationComplete;
 
-        for (var minute = 0; minute <= Services.SpeedTestHistoryService.MaxPerEngine; minute++)
+        for (var minute = 0; minute <= SpeedTestHistoryService.MaxPerEngine; minute++)
             vm.AddToHistory(At("HTTP", minute));
 
-        Assert.Equal(Services.SpeedTestHistoryService.MaxPerEngine, vm.HttpHistory.Count);
-        Assert.Equal(At("HTTP", Services.SpeedTestHistoryService.MaxPerEngine), vm.HttpHistory[0]);
+        Assert.Equal(SpeedTestHistoryService.MaxPerEngine, vm.HttpHistory.Count);
+        Assert.Equal(At("HTTP", SpeedTestHistoryService.MaxPerEngine), vm.HttpHistory[0]);
     }
 
     [Fact]
@@ -254,16 +257,16 @@ public sealed class SpeedTestViewModelTests : IDisposable
     public async Task ALoad_KeepsNoMoreThanTheHistoryFileDoes_WithAResultOnlyOnScreen()
     {
         var history = NewHistory();
-        for (var minute = 0; minute < Services.SpeedTestHistoryService.MaxPerEngine; minute++)
+        for (var minute = 0; minute < SpeedTestHistoryService.MaxPerEngine; minute++)
             Assert.True(await history.SaveAsync(At("HTTP", minute)));
         var vm = new SpeedTestViewModel(NewShared(), history);
         await vm.InitializationComplete;
-        var newest = At("HTTP", Services.SpeedTestHistoryService.MaxPerEngine);
+        var newest = At("HTTP", SpeedTestHistoryService.MaxPerEngine);
         vm.AddToHistory(newest);
 
         await vm.LoadHistoryAsync();
 
-        Assert.Equal(Services.SpeedTestHistoryService.MaxPerEngine, vm.HttpHistory.Count);
+        Assert.Equal(SpeedTestHistoryService.MaxPerEngine, vm.HttpHistory.Count);
         Assert.Equal(newest, vm.HttpHistory[0]);
         Assert.DoesNotContain(At("HTTP", 0), vm.HttpHistory);
     }
@@ -272,9 +275,9 @@ public sealed class SpeedTestViewModelTests : IDisposable
     //
     // A ping with no answer used to read 0 ms, a perfect score, on the card and in the history.
 
-    private static Services.ISpeedTestService EngineReturning(Models.SpeedTestResult result)
+    private static ISpeedTestService EngineReturning(SpeedTestResult result)
     {
-        var engine = Substitute.For<Services.ISpeedTestService>();
+        var engine = Substitute.For<ISpeedTestService>();
         engine.RunHttpAsync(Arg.Any<IProgress<(int Percent, string Message)>?>(), Arg.Any<CancellationToken>())
               .Returns(Task.FromResult(result));
         engine.RunOoklaAsync(Arg.Any<IProgress<(int Percent, string Message)>?>(), Arg.Any<CancellationToken>(), Arg.Any<int?>())
@@ -286,7 +289,7 @@ public sealed class SpeedTestViewModelTests : IDisposable
     public async Task AnHttpRunWhosePingGotNoAnswer_ShowsNoPing_SaysWhy_AndSavesNoPing()
     {
         var history = NewHistory();
-        var noPing = new Models.SpeedTestResult("HTTP", 312.4, 41.7, null, "speed.cloudflare.com", new DateTime(2026, 9, 29, 9, 0, 0));
+        var noPing = new SpeedTestResult("HTTP", 312.4, 41.7, null, "speed.cloudflare.com", new DateTime(2026, 9, 29, 9, 0, 0));
         var vm = new SpeedTestViewModel(NewShared(), history, EngineReturning(noPing));
         await vm.InitializationComplete;
 
@@ -305,7 +308,7 @@ public sealed class SpeedTestViewModelTests : IDisposable
     public async Task AnOoklaRun_ThatMeasuredEverything_SaysOnlyThatItIsDone()
     {
         var history = NewHistory();
-        var measured = new Models.SpeedTestResult("Ookla", 480.2, 95.1, 7.4, "Bucharest", new DateTime(2026, 9, 29, 9, 5, 0));
+        var measured = new SpeedTestResult("Ookla", 480.2, 95.1, 7.4, "Bucharest", new DateTime(2026, 9, 29, 9, 5, 0));
         var vm = new SpeedTestViewModel(NewShared(), history, EngineReturning(measured));
         await vm.InitializationComplete;
 
@@ -327,5 +330,5 @@ public sealed class SpeedTestViewModelTests : IDisposable
         "HTTP done — upload could not be measured; no reply to ping (some networks block it); result could not be saved to history")]
     public void DescribeFinished_SaysWhatWasNotMeasured_AndWhetherItWasSaved(double? up, double? ping, bool saved, string expected)
         => Assert.Equal(expected, SpeedTestViewModel.DescribeFinished(
-            "HTTP", new Models.SpeedTestResult("HTTP", 100, up, ping, "server", new DateTime(2026, 9, 29)), saved));
+            "HTTP", new SpeedTestResult("HTTP", 100, up, ping, "server", new DateTime(2026, 9, 29)), saved));
 }

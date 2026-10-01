@@ -4,7 +4,7 @@
 
 using System.Collections.Concurrent;
 using NSubstitute;
-using SysManager.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

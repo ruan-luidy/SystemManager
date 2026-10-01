@@ -3,7 +3,7 @@
 // License: MIT
 
 using System.IO;
-using SysManager.ViewModels;
+using SysManager.Features.Defender;
 
 namespace SysManager.Tests;
 

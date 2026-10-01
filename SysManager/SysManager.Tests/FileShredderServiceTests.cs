@@ -5,8 +5,9 @@
 using System.Globalization;
 using System.IO;
 using System.Security;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.FileShredder;
+using SysManager.Features.FileShredder.Models;
+using SysManager.Features.FileShredder.Services;
 
 namespace SysManager.Tests;
 

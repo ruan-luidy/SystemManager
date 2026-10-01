@@ -2,8 +2,12 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.AppUpdates;
+using SysManager.Features.Cleanup;
+using SysManager.Features.WindowsUpdate;
+using SysManager.Features.WindowsUpdate.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 
@@ -18,7 +22,7 @@ public class AdminElevationVmTests
     {
         var vm = new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService());
         // Must equal the current process' elevation state.
-        Assert.Equal(Helpers.AdminHelper.IsElevated(), vm.IsElevated);
+        Assert.Equal(AdminHelper.IsElevated(), vm.IsElevated);
     }
 
     [Fact]
@@ -32,7 +36,7 @@ public class AdminElevationVmTests
     public void CleanupVm_ExposesIsElevated()
     {
         var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
-        Assert.Equal(Helpers.AdminHelper.IsElevated(), vm.IsElevated);
+        Assert.Equal(AdminHelper.IsElevated(), vm.IsElevated);
     }
 
     [Fact]
@@ -46,7 +50,7 @@ public class AdminElevationVmTests
     public void AppUpdatesVm_ExposesIsElevated()
     {
         var vm = new AppUpdatesViewModel(new WingetService(new PowerShellRunner()));
-        Assert.Equal(Helpers.AdminHelper.IsElevated(), vm.IsElevated);
+        Assert.Equal(AdminHelper.IsElevated(), vm.IsElevated);
     }
 
     [Fact]

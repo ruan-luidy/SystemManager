@@ -3,7 +3,7 @@
 // License: MIT
 
 using System.Net;
-using SysManager.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

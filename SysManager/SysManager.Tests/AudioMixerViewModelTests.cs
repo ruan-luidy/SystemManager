@@ -5,10 +5,11 @@
 using System.Collections.Specialized;
 using System.Reflection;
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
-using SysManager.Views;
+using SysManager.Features.AudioMixer;
+using SysManager.Features.AudioMixer.Models;
+using SysManager.Features.AudioMixer.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

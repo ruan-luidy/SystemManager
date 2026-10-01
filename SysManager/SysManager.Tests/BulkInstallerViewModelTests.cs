@@ -4,9 +4,10 @@
 
 using System.IO;
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.BulkInstaller;
+using SysManager.Features.BulkInstaller.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

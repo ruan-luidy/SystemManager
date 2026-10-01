@@ -4,7 +4,7 @@
 
 using System.IO;
 using System.Reflection;
-using SysManager.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -155,7 +155,7 @@ public class UpdateServiceAuthenticodeTests
         // alone stayed GREEN when the subject comparison itself was replaced with a constant. Found by
         // mutating exactly that: the pin can be removed while the constant is still mentioned twice.
         Assert.Contains("cert.Subject.Contains(ExpectedSignerSubject", method, StringComparison.Ordinal);
-        Assert.Contains("Helpers.Authenticode.ValidateChain", method, StringComparison.Ordinal);
+        Assert.Contains("Authenticode.ValidateChain", method, StringComparison.Ordinal);
         Assert.Contains("X509RevocationMode.Online", method, StringComparison.Ordinal);
         Assert.Contains("return false", method, StringComparison.Ordinal);   // and it fails closed
     }

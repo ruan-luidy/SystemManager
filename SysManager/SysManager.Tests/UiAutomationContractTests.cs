@@ -161,12 +161,11 @@ public partial class UiAutomationContractTests
     public void EveryElevationButton_IsAnnouncedWithTheWordsPrintedOnIt()
     {
         const string label = "Run as administrator";
-        var views = TestPaths.AppDir("Views");
 
         var offenders = new List<string>();
         var checkedButtons = 0;
 
-        foreach (var view in Directory.EnumerateFiles(views, "*.xaml", SearchOption.TopDirectoryOnly))
+        foreach (var view in TestPaths.ViewFiles("*.xaml"))
         {
             foreach (var button in XDocument.Load(view)
                          .Descendants(Presentation + "Button")
@@ -222,12 +221,11 @@ public partial class UiAutomationContractTests
     [Fact]
     public void EveryLabelledControl_IsAnnouncedWithTheWordsPrintedOnIt()
     {
-        var views = TestPaths.AppDir("Views");
         string[] controls = ["Button", "CheckBox", "RadioButton", "ToggleButton"];
         var offenders = new List<string>();
         var checkedControls = 0;
 
-        foreach (var view in Directory.EnumerateFiles(views, "*.xaml", SearchOption.TopDirectoryOnly))
+        foreach (var view in TestPaths.ViewFiles("*.xaml"))
         {
             XDocument document;
             try { document = XDocument.Load(view); }
@@ -372,9 +370,8 @@ public partial class UiAutomationContractTests
         var offenders = new List<string>();
         var inspected = 0;
 
-        var files = Directory
-            .EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml", SearchOption.TopDirectoryOnly)
-            .Append(Path.Combine(appDir, "MainWindow.xaml"))
+        var files = TestPaths.ViewFiles("*.xaml")
+            .Append(TestPaths.AppPath("MainWindow.xaml"))
             // App.xaml too, and not for completeness: it is the only file where the template-part exclusion
             // below has anything to exclude. Scoped to the views alone, that rule skipped zero elements and
             // was decoration; here it earns its place on PART_EditableTextBox, and a future unnamed input

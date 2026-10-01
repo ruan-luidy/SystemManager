@@ -3,7 +3,7 @@
 // License: MIT
 
 using System.Management;
-using SysManager.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 

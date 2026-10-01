@@ -2,8 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Models;
-using SysManager.ViewModels;
+using SysManager.Features.PrivacyMonitor;
+using SysManager.Features.PrivacyMonitor.Models;
 
 namespace SysManager.Tests;
 

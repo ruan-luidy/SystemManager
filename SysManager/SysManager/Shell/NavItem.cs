@@ -1,0 +1,197 @@
+// SysManager · NavItem
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+
+using System.ComponentModel;
+using System.Windows.Controls;
+using CommunityToolkit.Mvvm.ComponentModel;
+using SysManager.Shared;
+
+namespace SysManager.Shell;
+
+/// <summary>
+/// A single entry in the left nav. Both the <see cref="View"/> AND the underlying
+/// ViewModel (<see cref="Content"/>) are materialised lazily on first access, so the
+/// ~55 tab view-models (most of which kick off a background scan / timer in their
+/// constructor) are NOT all built at startup — only the tab the user actually opens.
+/// Exposes <see cref="IsBusy"/> from the underlying ViewModel so the sidebar can show
+/// a progress indicator when the tab is working. Implements <see cref="IDisposable"/>
+/// to unsubscribe from ViewModel PropertyChanged events on teardown.
+/// </summary>
+public sealed partial class NavItem : ObservableObject, IDisposable
+{
+    private UserControl? _view;
+    private object? _content;
+    private Func<object>? _contentFactory;
+
+    public required string Id { get; init; }
+    public required string Label { get; init; }
+    public required Type ViewType { get; init; }
+
+    /// <summary>
+    /// Plain-language words that should find this tab, beyond its label.
+    /// </summary>
+    /// <remarks>
+    /// A search that matches only labels helps someone who already knows the vocabulary, and does nothing
+    /// for the person this app is built for. She types "slow startup", "popups", "webcam", "free up space"
+    /// — none of which appear in "Boot Analyzer", "Notification Blocker", "Camera/Mic/Location" or
+    /// "Standby List Cleaner" (#1505).
+    /// <para>Data, not a service: one string next to the label it belongs to, so adding a tab and adding
+    /// its keywords is one edit in one place. <c>EveryJargonNamedTab_CanBeFoundByPlainWords</c> pins that
+    /// the tabs whose names are jargon actually carry some.</para>
+    /// <para>Not shown anywhere. It exists to be matched, which is why the guard that catches unread
+    /// properties has to know that — see its exclusion list.</para>
+    /// </remarks>
+    public string Keywords { get; init; } = "";
+
+    /// <summary>
+    /// True when <paramref name="text"/> appears in this tab's label or keywords.
+    /// </summary>
+    /// <remarks>
+    /// Case-insensitive, and substring rather than word-prefix: someone typing "ram" should find
+    /// "memory, ram, free up", and someone typing "startup" should find "slow startup" without having to
+    /// start at a word boundary.
+    /// </remarks>
+    public bool Matches(string text) =>
+        Label.Contains(text, StringComparison.OrdinalIgnoreCase)
+        || Keywords.Contains(text, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The tab's ViewModel. Two ways to supply it:
+    /// <list type="bullet">
+    /// <item>Eager — assign a ready instance (<c>Content = vm</c>). Used by tests and by the
+    /// few tabs that must exist at startup (e.g. Dark Mode owns the always-on theme schedule).</item>
+    /// <item>Lazy — leave it unset and provide <see cref="ContentFactory"/>; the instance is built
+    /// on first access and cached.</item>
+    /// </list>
+    /// First materialisation (either way, via the getter) wires <see cref="IsBusy"/> forwarding,
+    /// so the sidebar spinner works regardless. A tab that is never opened never builds its VM.
+    /// </summary>
+    public object Content
+    {
+        get
+        {
+            if (_content is not null) return _content;
+
+            _content = _contentFactory?.Invoke()
+                ?? throw new InvalidOperationException(
+                    $"NavItem '{Id}' has neither an eager Content nor a ContentFactory set.");
+            WireBusy(_content);
+            return _content;
+        }
+        init
+        {
+            _content = value;   // eager path — instance provided up front
+        }
+    }
+
+    /// <summary>
+    /// Factory that builds the tab's ViewModel on first <see cref="Content"/> access (lazy path,
+    /// e.g. resolve from DI only when the tab is first opened). Ignored if an eager
+    /// <see cref="Content"/> instance was assigned.
+    /// </summary>
+    public Func<object>? ContentFactory
+    {
+        private get => _contentFactory;
+        init => _contentFactory = value;
+    }
+
+    /// <summary>
+    /// True once <see cref="Content"/> has been materialised. Lets teardown / activation logic
+    /// touch the VM without forcing a never-opened tab to build one.
+    /// </summary>
+    public bool IsContentCreated => _content is not null;
+
+    /// <summary>
+    /// True for features that are implemented but not yet QA-verified. The sidebar
+    /// shows a small "PREVIEW" pill next to the label, and the view shows a
+    /// <see cref="DevelopmentBanner"/> so users know the feature is new.
+    /// </summary>
+    public bool IsInDevelopment { get; init; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectionStatus))]
+    private bool _isSelected;
+
+    /// <summary>Selection state exposed to the sidebar's UI Automation peers.</summary>
+    public string SelectionStatus => IsSelected ? "Selected" : string.Empty;
+
+    [ObservableProperty] private bool _isBusy;
+
+    /// <summary>
+    /// The tab's progress, mirrored from its view-model so the shell can publish it to the Windows taskbar
+    /// button without reaching into the view-model — or forcing a never-opened tab to build one.
+    /// </summary>
+    /// <remarks>
+    /// Both signals, not one. 37 view-models set <see cref="ViewModelBase.IsProgressIndeterminate"/> and 10
+    /// set <see cref="ViewModelBase.Progress"/>, and the three longest operations in the app — Deep Cleanup,
+    /// File Shredder and Speed Test — are in the second group only. A taskbar driven off the indeterminate
+    /// flag alone would be silent exactly where a user is most likely to have minimised the window.
+    /// </remarks>
+    [ObservableProperty] private int _progress;
+
+    /// <inheritdoc cref="Progress"/>
+    [ObservableProperty] private bool _isProgressIndeterminate;
+
+    /// <summary>
+    /// Wire busy/progress forwarding from the underlying ViewModel. Called automatically on first
+    /// materialisation of <see cref="Content"/>. For an eagerly-assigned instance that must
+    /// forward IsBusy before it is ever displayed, call this after construction.
+    /// </summary>
+    public NavItem WireBusy()
+    {
+        if (_content is not null) WireBusy(_content);
+        return this;
+    }
+
+    private void WireBusy(object content)
+    {
+        if (content is ViewModelBase vm)
+        {
+            // Idempotent: -= then += so an eager WireBusy() followed by the getter's wiring
+            // (or a double WireBusy) never double-subscribes.
+            vm.PropertyChanged -= OnViewModelPropertyChanged;
+            vm.PropertyChanged += OnViewModelPropertyChanged;
+            IsBusy = vm.IsBusy;
+            Progress = vm.Progress;
+            IsProgressIndeterminate = vm.IsProgressIndeterminate;
+        }
+    }
+
+    /// <summary>
+    /// Unsubscribe from ViewModel events and dispose the VM — but only if it was ever
+    /// materialised. A tab the user never opened built no VM, so there is nothing to release
+    /// (and forcing creation here would defeat the whole lazy design).
+    /// </summary>
+    public void Dispose()
+    {
+        if (_content is null) return; // never opened → nothing built
+        if (_content is ViewModelBase vm)
+            vm.PropertyChanged -= OnViewModelPropertyChanged;
+        (_content as IDisposable)?.Dispose();
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not ViewModelBase vm) return;
+        switch (e.PropertyName)
+        {
+            case nameof(ViewModelBase.IsBusy): IsBusy = vm.IsBusy; break;
+            case nameof(ViewModelBase.Progress): Progress = vm.Progress; break;
+            case nameof(ViewModelBase.IsProgressIndeterminate):
+                IsProgressIndeterminate = vm.IsProgressIndeterminate;
+                break;
+        }
+    }
+
+    public UserControl View
+    {
+        get
+        {
+            if (_view is not null) return _view;
+            _view = (UserControl)Activator.CreateInstance(ViewType)!;
+            _view.DataContext = Content; // materialises the VM on first view
+            return _view;
+        }
+    }
+}

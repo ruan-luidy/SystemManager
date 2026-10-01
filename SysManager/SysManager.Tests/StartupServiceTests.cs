@@ -2,8 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.Startup;
+using SysManager.Features.Startup.Models;
+using SysManager.Features.Startup.Services;
 
 namespace SysManager.Tests;
 

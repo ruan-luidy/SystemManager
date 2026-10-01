@@ -3,9 +3,10 @@
 // License: MIT
 
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.RestorePoints;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -120,7 +121,7 @@ public class RestorePointsViewModelTests
         var vm = NewVm(out var runner);
         await vm.InitializationComplete;
         runner.ClearReceivedCalls();
-        vm.SelectedPoint = new SysManager.Models.RestorePoint(7, "Before the driver update", DateTime.Now, "12", "100");
+        vm.SelectedPoint = new SysManager.Shared.Models.RestorePoint(7, "Before the driver update", DateTime.Now, "12", "100");
         using var dialog = new DialogAnswer(confirm: true);
         using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "DISM RestoreHealth");
         Assert.NotNull(held);

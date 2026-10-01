@@ -3,8 +3,9 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Helpers;
-using SysManager.ViewModels;
+using SysManager.Features.AppUpdates;
+using SysManager.Features.Uninstaller;
+using SysManager.Shared.Helpers;
 
 namespace SysManager.Tests;
 
@@ -176,12 +177,11 @@ public class WingetFailureTests
         // how Bulk Installer ended up not using it at all. The name promises all three tabs, so all
         // three are read: asserting only the AppUpdates alias left the other two tabs free to
         // reintroduce their own wording — the very drift this test is named for.
-        var vmDir = TestPaths.AppDir("ViewModels");
         var offenders = new List<string>();
 
         foreach (var vm in new[] { "AppUpdatesViewModel.cs", "UninstallerViewModel.cs", "BulkInstallerViewModel.cs" })
         {
-            var source = File.ReadAllText(Path.Combine(vmDir, vm));
+            var source = File.ReadAllText(TestPaths.AppPath("ViewModels", vm));
 
             // Each tab must reach the shared constant — directly, or through the AppUpdates alias that
             // forwards to it. A tab spelling the sentence itself would satisfy neither.

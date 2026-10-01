@@ -1,0 +1,199 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Shell.ThemePopup"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Width="340">
+    <Border Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border1}"
+            BorderThickness="1" CornerRadius="16">
+        <Border.Effect>
+            <DropShadowEffect ShadowDepth="8" BlurRadius="32" Opacity="0.6" Color="Black"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Border Grid.Row="0" Padding="20,16,20,12" BorderBrush="{DynamicResource Border1}" BorderThickness="0,0,0,1">
+                <StackPanel>
+                    <TextBlock Text="Appearance" FontSize="15" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimary}"/>
+                    <TextBlock Text="Personalize your workspace" Style="{StaticResource Caption}"
+                               Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Body -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="480" Padding="20,14,20,18">
+                <StackPanel>
+                    <!-- Mode switcher -->
+                    <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}" Padding="3"
+                            BorderBrush="{DynamicResource Border1}" BorderThickness="1" Margin="0,0,0,16">
+                        <UniformGrid Columns="4">
+                            <RadioButton x:Name="DarkMode" Content="Dark" GroupName="Mode"
+                                         AutomationProperties.Name="Dark mode"
+                                         Style="{StaticResource ModePill}" IsChecked="True"/>
+                            <RadioButton x:Name="LightMode" Content="Light" GroupName="Mode"
+                                         AutomationProperties.Name="Light mode"
+                                         Style="{StaticResource ModePill}"/>
+                            <!-- The app already reads the Windows light/dark setting, and the Dark Mode tab
+                                 can put Windows itself on a schedule — while the app refused to follow it, so a
+                                 user who turned that schedule on watched SysManager desync from their desktop
+                                 every evening (#1631). Picking a preset leaves this mode, because SetPreset
+                                 takes the mode from the preset it was handed. -->
+                            <RadioButton x:Name="FollowWindowsMode" Content="Auto" GroupName="Mode"
+                                         AutomationProperties.Name="Auto mode, follow Windows"
+                                         ToolTip="Follow the Windows light/dark setting, and change with it."
+                                         Style="{StaticResource ModePill}"/>
+                            <RadioButton x:Name="CustomMode" Content="Custom" GroupName="Mode"
+                                         AutomationProperties.Name="Custom mode"
+                                         Style="{StaticResource ModePill}"/>
+                        </UniformGrid>
+                    </Border>
+
+                    <!-- Presets panel (visible for Dark/Light) -->
+                    <StackPanel x:Name="PresetsPanel">
+                        <!-- Presets grid -->
+                        <TextBlock Text="PRESETS" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
+                        <WrapPanel x:Name="PresetPanel"/>
+
+                        <!-- Background shade -->
+                        <TextBlock Text="BACKGROUND" Style="{StaticResource SectionLabel}" Margin="0,16,0,8"/>
+                        <Slider x:Name="ShadeSlider" Minimum="0" Maximum="1" Value="0.5"
+                                LargeChange="0.05" SmallChange="0.01"
+                                IsMoveToPointEnabled="True"
+                                AutomationProperties.Name="Background shade"
+                                Margin="0,0,0,4"/>
+                    </StackPanel>
+
+
+                    <!-- Custom panel (visible for Custom mode) -->
+                    <StackPanel x:Name="CustomPanel" Visibility="Collapsed">
+                        <TextBlock Text="CUSTOM COLORS" Style="{StaticResource SectionLabel}" Margin="0,0,0,10"/>
+
+                        <!-- Accent picker -->
+                        <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}"
+                                BorderBrush="{DynamicResource Border1}" BorderThickness="1"
+                                Padding="12,8" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Accent" Foreground="{DynamicResource TextSecondary}"
+                                           Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                                <!-- The four colour swatches are deliberately NOT tab stops. Their only
+                                     action is to focus and select the hex box immediately beside them, and
+                                     that box is already the next tab stop with its own accessible name — so a
+                                     tab stop here would focus the thing you are about to Tab to anyway, which
+                                     is a keystroke that does nothing. A Border is non-focusable by default,
+                                     so this is the default being correct rather than a setting.
+                                     EveryMouseClickableElement_IsAlsoKeyboardOperable lists them with this
+                                     reason, so the exemption is visible rather than assumed. -->
+                                <Border Grid.Column="1" x:Name="CustomAccentPreview"
+                                        Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#6366F1"
+                                        Margin="0,0,10,0" Cursor="Hand"
+                                        MouseLeftButtonUp="CustomAccent_Click"/>
+                                <TextBox Grid.Column="2" x:Name="CustomAccentHex" Text="#6366F1"
+                                         FontFamily="{StaticResource MonoFont}" FontSize="12"
+                                         Background="Transparent" BorderThickness="0"
+                                         Foreground="{DynamicResource TextPrimary}"
+                                         AutomationProperties.Name="Accent color hex value"
+                                         LostFocus="CustomHex_LostFocus" Tag="accent"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Background picker -->
+                        <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}"
+                                BorderBrush="{DynamicResource Border1}" BorderThickness="1"
+                                Padding="12,8" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Background" Foreground="{DynamicResource TextSecondary}"
+                                           Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                                <Border Grid.Column="1" x:Name="CustomBgPreview"
+                                        Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#070A0F"
+                                        Margin="0,0,10,0" Cursor="Hand"
+                                        MouseLeftButtonUp="CustomBg_Click"/>
+                                <TextBox Grid.Column="2" x:Name="CustomBgHex" Text="#070A0F"
+                                         FontFamily="{StaticResource MonoFont}" FontSize="12"
+                                         Background="Transparent" BorderThickness="0"
+                                         Foreground="{DynamicResource TextPrimary}"
+                                         AutomationProperties.Name="Background color hex value"
+                                         LostFocus="CustomHex_LostFocus" Tag="bg"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Surface picker -->
+                        <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}"
+                                BorderBrush="{DynamicResource Border1}" BorderThickness="1"
+                                Padding="12,8" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Surface" Foreground="{DynamicResource TextSecondary}"
+                                           Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                                <Border Grid.Column="1" x:Name="CustomSurfacePreview"
+                                        Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#0E1218"
+                                        Margin="0,0,10,0" Cursor="Hand"
+                                        MouseLeftButtonUp="CustomSurface_Click"/>
+                                <TextBox Grid.Column="2" x:Name="CustomSurfaceHex" Text="#0E1218"
+                                         FontFamily="{StaticResource MonoFont}" FontSize="12"
+                                         Background="Transparent" BorderThickness="0"
+                                         Foreground="{DynamicResource TextPrimary}"
+                                         AutomationProperties.Name="Surface color hex value"
+                                         LostFocus="CustomHex_LostFocus" Tag="surface"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Text picker -->
+                        <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}"
+                                BorderBrush="{DynamicResource Border1}" BorderThickness="1"
+                                Padding="12,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Text" Foreground="{DynamicResource TextSecondary}"
+                                           Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                                <Border Grid.Column="1" x:Name="CustomTextPreview"
+                                        Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#F1F3F7"
+                                        Margin="0,0,10,0" Cursor="Hand"
+                                        MouseLeftButtonUp="CustomText_Click"/>
+                                <TextBox Grid.Column="2" x:Name="CustomTextHex" Text="#F1F3F7"
+                                         FontFamily="{StaticResource MonoFont}" FontSize="12"
+                                         Background="Transparent" BorderThickness="0"
+                                         Foreground="{DynamicResource TextPrimary}"
+                                         AutomationProperties.Name="Text color hex value"
+                                         LostFocus="CustomHex_LostFocus" Tag="text"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- The way back. Custom mode was the only setting in the app with no undo: four typed hex
+                         values are persisted and restored on every launch, so a theme the user could not read
+                         was one they could not fix from inside the app — the only escape was deleting
+                         theme.json (#1561). Outside both panels because a preset plus an extreme shade can
+                         also be worth abandoning, and because the button that rescues you from an unreadable
+                         theme should not itself be behind a mode switch. -->
+                    <Button x:Name="ResetThemeButton" Content="Reset to default theme"
+                            Style="{StaticResource GhostButton}"
+                            HorizontalAlignment="Left" Margin="0,16,0,0" Padding="10,6" FontSize="12"
+                            ToolTip="Puts the shipped dark theme and the default background shade back."
+                            Click="ResetTheme_Click"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>

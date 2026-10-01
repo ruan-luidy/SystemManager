@@ -1,0 +1,259 @@
+// SysManager · RestorePointsViewModel — list, create, and restore System Restore points
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+
+using System.Globalization;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Serilog;
+using SysManager.Shared;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
+
+namespace SysManager.Features.RestorePoints;
+
+/// <summary>
+/// ViewModel for the Restore Points tab. Lists existing System Restore points,
+/// creates new ones, and restores from a selected point. Creating and restoring
+/// require administrator rights; restoring reboots the machine and is gated behind
+/// an explicit confirmation dialog.
+/// </summary>
+public sealed partial class RestorePointsViewModel : ViewModelBase
+{
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
+    private readonly RestorePointService _service;
+    private CancellationTokenSource? _cts;
+
+    public BulkObservableCollection<RestorePoint> RestorePoints { get; } = new();
+
+    [ObservableProperty] private bool _isElevated;
+    [ObservableProperty] private bool _hasPoints;
+    [ObservableProperty] private string _newDescription = "";
+
+    // Distinguishes "Windows answered with none" from "Windows would not answer", so the empty state does not
+    // tell a standard user to enable System Restore on a PC that has restore points it will not list (#2476).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle), nameof(EmptyMessage))]
+    private bool _listWasRefused;
+
+    public string EmptyTitle => ListWasRefused ? "Restore points could not be listed" : "No restore points";
+
+    public string EmptyMessage => (ListWasRefused, IsElevated) switch
+    {
+        (true, false) => "Windows lists restore points only to an administrator. Use \"Run as administrator\" to see them.",
+        (true, true) => "Windows would not list them. Check that System Restore is available on this PC.",
+        _ => "Create one above, or enable System Restore in Windows if the list stays empty.",
+    };
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    private RestorePoint? _selectedPoint;
+
+    public bool HasSelection => SelectedPoint is not null;
+
+    public RestorePointsViewModel(RestorePointService service)
+    {
+        _service = service;
+        IsElevated = AdminHelper.IsElevated();
+        StatusMessage = "Loading restore points…";
+        PropertyChanged += OnVmPropertyChanged;
+        InitializeAsync(RefreshAsync);
+    }
+
+    private bool NotBusy => !IsBusy;
+    private bool CanCreate => !IsBusy && IsElevated;
+    private bool CanRestore => !IsBusy && IsElevated && HasSelection;
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(IsBusy) or nameof(IsElevated) or nameof(HasSelection))
+        {
+            RefreshCommand.NotifyCanExecuteChanged();
+            CreateCommand.NotifyCanExecuteChanged();
+            RestoreCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(NotBusy))]
+    private async Task RefreshAsync()
+    {
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Reading System Restore points…";
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        try
+        {
+            var points = await _service.ListAsync(_cts.Token).ConfigureAwait(true);
+            ListWasRefused = points is null;
+            RestorePoints.ReplaceWith(points ?? []);
+            HasPoints = RestorePoints.Count > 0;
+            StatusMessage = points switch
+            {
+                null => EmptyMessage,
+                [] => "No restore points found. System Restore may be turned off for this PC.",
+                _ => $"{points.Count} restore point{(points.Count == 1 ? "" : "s")}.",
+            };
+        }
+        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        finally
+        {
+            IsBusy = false;
+            IsProgressIndeterminate = false;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCreate))]
+    private async Task CreateAsync()
+    {
+        var description = string.IsNullOrWhiteSpace(NewDescription)
+            ? $"SysManager — {DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}"
+            : NewDescription.Trim();
+
+        // Disclose the side effect BEFORE doing it. Creating a checkpoint runs
+        // `Enable-ComputerRestore -Drive $env:SystemDrive` first (RestorePointService), because
+        // Checkpoint-Computer fails outright when protection is off. That is a real, persistent change to
+        // system configuration: someone who deliberately turned System Protection off — a common step on a
+        // small SSD, since it then reserves disk space indefinitely — got it switched back on by pressing
+        // a button that only advertised "create a restore point", with no prompt and no mention anywhere
+        // in the UI. Enabling it is the right behaviour (a restore point is useless otherwise); doing it
+        // without saying so is not.
+        if (!DialogService.Instance.Confirm(
+                $"Create a restore point named \"{description}\"?\n\n" + RestorePointService.ProtectionNotice,
+                "Create Restore Point"))
+        {
+            return;
+        }
+
+        // The lock Performance Mode's Create button already takes for the same call. Creating a point snapshots
+        // the system drive, which must not overlap an SFC or DISM repair, a feature change or an update install
+        // that SysManager is running (#2484).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Create restore point");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Creating restore point…";
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        try
+        {
+            var ok = await _service.CreateAsync(description, _cts.Token).ConfigureAwait(true);
+            if (ok)
+            {
+                NewDescription = "";
+                StatusMessage = "Restore point created.";
+                ActivityLogService.Instance.Log("Restore point", $"Created \"{description}\"");
+                ToastService.Instance.Show("Restore point created", description);
+                // Null only if Windows refused the read straight after making the point. The list then stays
+                // as it was rather than emptying.
+                if (await _service.ListAsync(_cts.Token).ConfigureAwait(true) is { } points)
+                {
+                    ListWasRefused = false;
+                    RestorePoints.ReplaceWith(points);
+                    HasPoints = points.Count > 0;
+                }
+            }
+            else
+            {
+                StatusMessage = "Could not create a restore point. Windows allows only one every 24 hours, " +
+                    "and System Restore must be enabled for the system drive.";
+            }
+        }
+        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        // CreateAsync runs PowerShell; a runspace/WMI-level fault would otherwise
+        // escape this async command unobserved. Surface it as a status message.
+        catch (System.Management.Automation.RuntimeException ex) { StatusMessage = $"Could not create a restore point: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Could not create a restore point: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not create a restore point: {ex.Message}"; }
+        finally
+        {
+            IsBusy = false;
+            IsProgressIndeterminate = false;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRestore))]
+    private async Task RestoreAsync()
+    {
+        if (SelectedPoint is not { } point) return;
+
+        if (!DialogService.Instance.Confirm(
+                $"Restore this PC to:\n\n#{point.SequenceNumber} — {point.Description}\n{point.CreatedDisplay}\n\n" +
+                "Windows will RESTART to apply the restore. Open files should be saved and " +
+                "other apps closed first. Your personal files are not affected, but programs and " +
+                "drivers installed after this point will be removed.\n\nContinue?",
+                "Restore System — this will restart Windows"))
+        {
+            StatusMessage = "Restore cancelled.";
+            return;
+        }
+
+        // Restore-Computer restarts Windows at once. Holding the lock means it cannot cut off an SFC or DISM
+        // repair, a component-store cleanup, a feature change or an update install SysManager is running (#2484).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "System restore");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Starting system restore — Windows will restart…";
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        try
+        {
+            var ok = await _service.RestoreAsync(point.SequenceNumber, _cts.Token).ConfigureAwait(true);
+            // On success the machine reboots, so this line is usually never reached.
+            StatusMessage = ok
+                ? "Restore initiated — the system will restart."
+                : "Could not start the restore. Make sure System Restore is enabled and try again.";
+            Log.Information("RestorePoint: restore to #{Seq} requested (ok={Ok})", point.SequenceNumber, ok);
+        }
+        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        // RestoreAsync runs PowerShell; a runspace/WMI-level fault would otherwise
+        // escape this async command unobserved. Surface it as a status message.
+        catch (System.Management.Automation.RuntimeException ex) { StatusMessage = $"Could not start the restore: {ex.Message}"; }
+        catch (InvalidOperationException ex) { StatusMessage = $"Could not start the restore: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not start the restore: {ex.Message}"; }
+        finally
+        {
+            IsBusy = false;
+            IsProgressIndeterminate = false;
+        }
+    }
+
+    [RelayCommand]
+    private void Cancel() => _cts?.Cancel();
+
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            App.RequestShutdown();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            PropertyChanged -= OnVmPropertyChanged;
+            _cts?.Cancel();
+            _cts?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+}

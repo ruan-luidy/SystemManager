@@ -4,9 +4,13 @@
 
 using System.IO;
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.Dashboard;
+using SysManager.Features.Dashboard.Models;
+using SysManager.Features.Dashboard.Services;
+using SysManager.Features.SpeedTest;
+using SysManager.Shared;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

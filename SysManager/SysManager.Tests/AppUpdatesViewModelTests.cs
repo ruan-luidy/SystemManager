@@ -4,9 +4,10 @@
 
 using System.Reflection;
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.AppUpdates;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -49,7 +50,7 @@ public class AppUpdatesViewModelTests
         // source of truth rather than the old tautological Assert.IsType<bool> (which
         // always passed on a bool property).
         var vm = NewVm();
-        Assert.Equal(SysManager.Helpers.AdminHelper.IsElevated(), vm.IsElevated);
+        Assert.Equal(SysManager.Shared.Helpers.AdminHelper.IsElevated(), vm.IsElevated);
     }
 
     [Fact]

@@ -2,9 +2,12 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.ViewModels;
+using SysManager.Features.StandbyMemory;
+using SysManager.Features.StandbyMemory.Services;
+using SysManager.Shared;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -90,7 +93,7 @@ public class StandbyMemoryTests
     // structurally incapable of appearing while a purge of a multi-gigabyte cache blocked.
 
     private static StandbyMemoryViewModel NewVm(string configDir) =>
-        new(new Services.StandbyMemoryService(), new Services.StandbyPreferenceService(configDir));
+        new(new StandbyMemoryService(), new StandbyPreferenceService(configDir));
 
     /// <summary>
     /// Elevated, the manual purge raises the busy flag and clears it, so the bar can appear.
@@ -182,7 +185,7 @@ public class StandbyMemoryTests
     {
         using var temp = new TempConfigDir();
         var file = System.IO.Path.Combine(temp.Path, "standby-preference.json");
-        new Services.StandbyPreferenceService(temp.Path).Save(new Services.StandbyPreference(true, 2048));
+        new StandbyPreferenceService(temp.Path).Save(new StandbyPreference(true, 2048));
         var before = System.IO.File.ReadAllBytes(file);
 
         // Held with delete sharing only while the tab opens, so it cannot read what was saved.

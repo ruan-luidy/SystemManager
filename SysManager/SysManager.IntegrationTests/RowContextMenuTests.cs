@@ -9,7 +9,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
-using SysManager.ViewModels;
+using SysManager.Features.ProcessManager;
+using SysManager.Features.WindowsServices;
 
 namespace SysManager.IntegrationTests;
 
@@ -171,7 +172,7 @@ public partial class RowContextMenuTests
 
     [Fact]
     public void ProcessManager_RowMenu_IsWiredToTheViewModel()
-        => WithRowMenu<Views.ProcessManagerView>((items, style) =>
+        => WithRowMenu<ProcessManagerView>((items, style) =>
         {
             AssertTagCarriesTheViewModel(style);
             AssertMenuIsLive(typeof(ProcessManagerViewModel),
@@ -181,7 +182,7 @@ public partial class RowContextMenuTests
 
     [Fact]
     public void Services_RowMenu_IsWiredToTheViewModel()
-        => WithRowMenu<Views.ServicesView>((items, style) =>
+        => WithRowMenu<ServicesView>((items, style) =>
         {
             AssertTagCarriesTheViewModel(style);
             AssertMenuIsLive(typeof(ServicesViewModel),

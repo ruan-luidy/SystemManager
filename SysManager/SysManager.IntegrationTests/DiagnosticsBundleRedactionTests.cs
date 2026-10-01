@@ -6,7 +6,9 @@ using System.IO;
 using System.IO.Compression;
 using System.Net.NetworkInformation;
 using System.Text;
-using SysManager.Services;
+using SysManager.Features.About;
+using SysManager.Features.About.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 

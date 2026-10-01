@@ -3,8 +3,8 @@
 // License: MIT
 
 using NSubstitute;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.BootAnalyzer;
+using SysManager.Shared.Services;
 using static SysManager.Tests.ScriptedBootReader;
 
 namespace SysManager.Tests;

@@ -3,8 +3,9 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Models;
-using SysManager.ViewModels;
+using SysManager.Features.BrowserCleaner;
+using SysManager.Features.ShortcutCleaner;
+using SysManager.Shared.Models;
 
 namespace SysManager.Tests;
 
@@ -185,11 +186,7 @@ public class SelectionSurvivesRescanTests
 
     private static string ViewModelSource(string name)
     {
-        var dir = new DirectoryInfo(Path.GetDirectoryName(typeof(BrokenShortcut).Assembly.Location)!);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "ViewModels")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        return File.ReadAllText(Path.Combine(dir!.FullName, "SysManager", "ViewModels", name + ".cs"));
+        return File.ReadAllText(TestPaths.AppPath("ViewModels", name + ".cs"));
     }
 
     [Theory]

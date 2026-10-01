@@ -2,8 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.SystemHealth;
+using SysManager.Features.SystemHealth.Models;
+using SysManager.Features.SystemHealth.Services;
 
 namespace SysManager.Tests;
 

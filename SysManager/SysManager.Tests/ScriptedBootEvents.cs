@@ -4,7 +4,7 @@
 
 using System.Diagnostics.Eventing.Reader;
 using System.Xml.Linq;
-using SysManager.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

@@ -3,8 +3,10 @@
 // License: MIT
 
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.Dashboard;
+using SysManager.Features.Dashboard.Models;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -99,7 +101,7 @@ public class NavigationServiceTests
     {
         // "Fix this" beside "All SMART indicators healthy" would teach the user the button means nothing.
         Assert.Equal(expected,
-            ViewModels.DashboardViewModel.NavTargetFor(severity, "nav-system-health"));
+            DashboardViewModel.NavTargetFor(severity, "nav-system-health"));
     }
 
     [Theory]

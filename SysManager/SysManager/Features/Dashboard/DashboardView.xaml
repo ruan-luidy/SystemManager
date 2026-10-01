@@ -1,0 +1,667 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Features.Dashboard.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SysManager.Features.Dashboard"
+             xmlns:v="clr-namespace:SysManager.Shared.Controls"
+             xmlns:models="clr-namespace:SysManager.Features.Dashboard.Models"
+             xmlns:models2="clr-namespace:SysManager.Shared.Models"
+             d:DataContext="{d:DesignInstance vm:DashboardViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{DynamicResource Surface0}">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="28,24,28,16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <!-- Tune-Up progress + result. The ViewModel has computed TuneUpResult, HasTuneUpResult,
+                     TuneUpProgress, TuneUpStep and even a DismissTuneUpResult command all along; none
+                     of it was ever rendered, so the wizard ran, found problems and discarded them. -->
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- ═══ ROW 0: Header ═══ -->
+            <DockPanel Grid.Row="0" Margin="0,0,0,16">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Scan system" Command="{Binding RefreshCommand}"
+                            AutomationProperties.AutomationId="btn-dashboard-scan-system"
+                            AutomationProperties.Name="Scan system"
+                            Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
+                    <Button Command="{Binding RunTuneUpCommand}"
+                            AutomationProperties.Name="Quick Tune-Up"
+                            Style="{StaticResource PrimaryButton}" Padding="16,8">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE945;" FontFamily="Segoe Fluent Icons" FontSize="14"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="Quick Tune-Up" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Left">
+                    <TextBlock Text="Dashboard" Style="{StaticResource Display}"/>
+                    <!-- The explanation is STATIC and comes first; the live OS and uptime line sits under it.
+                         This slot held only those two bindings, so the first subtitle anyone reads on opening
+                         the app said what this PC IS and never what the screen is for (#1506).
+                         Deliberately shorter than the other tabs' explanations: this header shares its row
+                         with the action buttons to its right, and the elevation banner is directly below, so
+                         a line that wraps here costs content on a small window. -->
+                    <TextBlock Text="What this PC is, how it is doing right now, and anything worth a closer look."
+                               Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                    <TextBlock Style="{StaticResource Subtle}" Margin="0,2,0,0">
+                        <Run Text="{Binding OsLine, Mode=OneWay}"/>
+                        <Run Text=" · "/>
+                        <Run Text="{Binding UptimeLine, Mode=OneWay}"/>
+                    </TextBlock>
+                </StackPanel>
+            </DockPanel>
+
+            <!-- ═══ ROW 1: Elevation banner ═══ -->
+            <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
+                           NotElevatedMessage="Some features require administrator privileges for full data."
+                           ElevatedMessage="Running as administrator — all sensors and quick actions have full access."/>
+
+            <!-- ═══ ROW 2: Tune-Up in progress ═══ -->
+            <!-- TuneUpProgress / TuneUpStep were computed on every step and never shown, so the wizard
+                 ran with no indication of what it was doing or how far along it was. Cancel is offered
+                 here because CancelTuneUpCommand already existed and was also unbound. -->
+            <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16"
+                    Visibility="{Binding IsTuneUpRunning, Converter={StaticResource FlexVis}}">
+                <StackPanel>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Cancel" Command="{Binding CancelTuneUpCommand}"
+                                AutomationProperties.Name="Cancel Quick Tune-Up"
+                                Style="{StaticResource GhostButton}" Padding="10,2" Margin="12,0,0,0"/>
+                        <TextBlock Text="Quick Tune-Up" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
+                    </DockPanel>
+                    <ProgressBar AutomationProperties.Name="Tune-Up progress" Height="6" Minimum="0" Maximum="100"
+                                 Value="{Binding TuneUpProgress}" Margin="0,10,0,0"/>
+                    <TextBlock Text="{Binding TuneUpStep}" Style="{StaticResource Caption}" Margin="0,6,0,0"
+                               Visibility="{Binding TuneUpStep, Converter={StaticResource FlexVis}}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ ROW 3: Tune-Up results ═══ -->
+            <!-- The whole point of #1489: the wizard cleaned, scanned and computed a full TuneUpResult —
+                 including a WarningCount, an OverallVerdict and a per-disk DiskHealthSummary whose own
+                 doc comment says it is "for the Tune-Up result card" — and then threw all of it away.
+                 Each finding links to the tab that can act on it: "3 broken shortcuts" is only useful
+                 if it can take you to the cleaner. Navigation goes through OpenTabCommand, which shares
+                 the shell lookup this view model already used for the quick-action link. -->
+            <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20"
+                    Visibility="{Binding HasTuneUpResult, Converter={StaticResource FlexVis}}">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,12">
+                        <Button DockPanel.Dock="Right" Content="Dismiss" Command="{Binding DismissTuneUpResultCommand}"
+                                AutomationProperties.Name="Dismiss Tune-Up results"
+                                Style="{StaticResource GhostButton}" Padding="10,2" Margin="12,0,0,0"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE945;" FontFamily="Segoe Fluent Icons" FontSize="15"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"
+                                       Foreground="{Binding TuneUpResult.OverallColorHex, Converter={StaticResource HexBrush}}"/>
+                            <TextBlock Text="Tune-Up complete" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center"/>
+                            <Border Background="{DynamicResource Surface2}" CornerRadius="{StaticResource RadiusMd}" Padding="8,2" Margin="10,0,0,0"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="{Binding TuneUpResult.OverallVerdict}" Style="{StaticResource Caption}" FontWeight="SemiBold"
+                                           Foreground="{Binding TuneUpResult.OverallColorHex, Converter={StaticResource HexBrush}}"/>
+                            </Border>
+                        </StackPanel>
+                    </DockPanel>
+
+                    <!-- What it already did -->
+                    <TextBlock Style="{StaticResource Subtle}" TextWrapping="Wrap">
+                        <Run Text="Freed"/>
+                        <Run Text="{Binding TuneUpResult.FreedDisplay, Mode=OneWay}" FontWeight="SemiBold"/>
+                        <Run Text="by removing"/>
+                        <Run Text="{Binding TuneUpResult.TempFilesDeleted, Mode=OneWay, StringFormat={}{0:N0}}" FontWeight="SemiBold"/>
+                        <Run Text="temporary files."/>
+                    </TextBlock>
+                    <TextBlock Text="Recycle Bin emptied." Style="{StaticResource Subtle}" Margin="0,4,0,0"
+                               Visibility="{Binding TuneUpResult.RecycleBinEmptied, Converter={StaticResource FlexVis}}"/>
+
+                    <!-- What it found, each with the tab that can act on it -->
+                    <StackPanel Margin="0,12,0,0"
+                                Visibility="{Binding TuneUpResult.WarningCount, Converter={StaticResource FlexVis}}">
+                        <TextBlock Text="WHAT TO LOOK AT" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
+
+                        <!-- Broken shortcuts -->
+                        <DockPanel Margin="0,0,0,6"
+                                   Visibility="{Binding TuneUpResult.BrokenShortcutsFound, Converter={StaticResource FlexVis}}">
+                            <Button DockPanel.Dock="Right" Content="Clean up" Command="{Binding OpenTabCommand}" CommandParameter="nav-shortcut-cleaner"
+                                    AutomationProperties.Name="Clean up — open Shortcut Cleaner"
+                                    Style="{StaticResource SecondaryButton}" Padding="10,4" Margin="12,0,0,0"/>
+                            <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}">
+                                <Run Text="{Binding TuneUpResult.BrokenShortcutsFound, Mode=OneWay}" FontWeight="SemiBold"/>
+                                <Run Text="broken shortcut(s) point at files that no longer exist."/>
+                            </TextBlock>
+                        </DockPanel>
+
+                        <!-- Uptime -->
+                        <DockPanel Margin="0,0,0,6"
+                                   Visibility="{Binding TuneUpResult.UptimeWarning, Converter={StaticResource FlexVis}}">
+                            <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"
+                                       Text="This PC has not restarted in over two weeks — a restart often clears slowdowns on its own."/>
+                        </DockPanel>
+
+                        <!-- RAM -->
+                        <DockPanel Margin="0,0,0,6"
+                                   Visibility="{Binding TuneUpResult.RamWarning, Converter={StaticResource FlexVis}}">
+                            <Button DockPanel.Dock="Right" Content="See what's running" Command="{Binding OpenTabCommand}" CommandParameter="nav-processes"
+                                    AutomationProperties.Name="See what's running — open Process Manager"
+                                    Style="{StaticResource SecondaryButton}" Padding="10,4" Margin="12,0,0,0"/>
+                            <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}">
+                                <Run Text="Memory is"/>
+                                <Run Text="{Binding TuneUpResult.RamUsedPercent, Mode=OneWay, StringFormat={}{0:F0}%}" FontWeight="SemiBold"/>
+                                <Run Text="full — something running may be using more than its share."/>
+                            </TextBlock>
+                        </DockPanel>
+
+                        <!-- Per-disk verdicts -->
+                        <ItemsControl ItemsSource="{Binding TuneUpResult.DiskResults}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,0,0,6">
+                                        <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}">
+                                            <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold"/>
+                                            <Run Text=" — "/>
+                                            <Run Text="{Binding Verdict, Mode=OneWay}"
+                                                 Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"/>
+                                        </TextBlock>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Deeper cleaning, always offered once a run has completed -->
+                        <DockPanel Margin="0,6,0,0">
+                            <Button DockPanel.Dock="Right" Content="Deep Cleanup" Command="{Binding OpenTabCommand}" CommandParameter="nav-deep-cleanup"
+                                    AutomationProperties.Name="Open Deep Cleanup"
+                                    Style="{StaticResource SecondaryButton}" Padding="10,4" Margin="12,0,0,0"/>
+                            <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"
+                                       Text="Want to reclaim more? Deep Cleanup looks in places this quick pass leaves alone."/>
+                        </DockPanel>
+                    </StackPanel>
+
+                    <!-- Nothing to report. Only when every check ran: a check that could not run left its
+                         field at the value meaning "nothing wrong", and this line then vouched for all of
+                         them (#2501). -->
+                    <TextBlock Style="{StaticResource Subtle}" Margin="0,12,0,0" TextWrapping="Wrap"
+                               Text="Nothing else needs attention — no broken shortcuts, memory and disks look fine, and this PC has restarted recently."
+                               Visibility="{Binding TuneUpResult.AllChecksPassed, Converter={StaticResource FlexVis}}"/>
+
+                    <!-- What could not be checked, in the same place and style, so it is read where the
+                         reassurance would otherwise have been. -->
+                    <TextBlock Style="{StaticResource Subtle}" Margin="0,12,0,0" TextWrapping="Wrap"
+                               Text="{Binding TuneUpResult.NotCheckedDisplay}"
+                               Visibility="{Binding TuneUpResult.HasUncheckedItems, Converter={StaticResource FlexVis}}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ ROW 4: Health Score Hero ═══ -->
+            <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20"
+                    Visibility="{Binding HasHealthScore, Converter={StaticResource FlexVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Width="90" Height="90" CornerRadius="{StaticResource RadiusPill}"
+                            BorderThickness="5" Margin="0,0,20,0"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            BorderBrush="{Binding HealthResult.ColorHex, Converter={StaticResource HexBrush}}">
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding HealthResult.Score}" Style="{StaticResource MetricLarge}" FontWeight="Bold"
+                                       HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
+                            <TextBlock Text="{Binding HealthResult.Label}" FontSize="10"
+                                       HorizontalAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="System Health Score" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,8"/>
+                        <ItemsControl ItemsSource="{Binding HealthResult.Recommendations}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                        <TextBlock Text="{Binding IconGlyph}" FontFamily="Segoe Fluent Icons"
+                                                   FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                   Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"/>
+                                        <TextBlock Text="{Binding Message}" Style="{StaticResource Subtle}" VerticalAlignment="Center"
+                                                   Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"/>
+                                        <!-- Each recommendation named a fix and gave no route to it (#1496).
+                                             Not every one has a destination: "Restart recommended" and
+                                             "consider replacement" for a worn battery are things no tab
+                                             here does, and CanNavigate hides the button for those rather
+                                             than inventing somewhere to send you. -->
+                                        <Button Content="Fix this"
+                                                AutomationProperties.Name="{Binding Message, StringFormat='Fix this: {0}'}"
+                                                Command="{Binding DataContext.OpenTabCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding NavTargetId}"
+                                                Style="{StaticResource GhostButton}" Padding="8,2" FontSize="11"
+                                                Foreground="{DynamicResource MetricBlue}" VerticalAlignment="Center"
+                                                Margin="8,0,0,0"
+                                                Visibility="{Binding CanNavigate, Converter={StaticResource BoolToVis}}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Nothing to recommend, which is GOOD NEWS — so a statement, not an instruction,
+                             the same shape the Tune-up card above already uses. Gated on the flag because
+                             HealthResult is null until the scan finishes: a count binding would fail, and a
+                             failed binding leaves Visibility at its default, announcing "nothing needs
+                             attention" before anything had been checked. -->
+                        <TextBlock Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                   Text="Nothing needs attention right now."
+                                   Visibility="{Binding HealthHasNothingToImprove, Converter={StaticResource FlexVis}}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Health score loading -->
+            <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="14"
+                    Visibility="{Binding IsHealthScoreLoading, Converter={StaticResource BoolToVis}}">
+                <StackPanel Orientation="Horizontal">
+                    <ProgressBar AutomationProperties.Name="Computing health score" IsIndeterminate="True" Width="80" Height="4" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Computing health score…" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ ROW 5: Vitals (CPU, RAM, GPU) — REAL-TIME ═══ -->
+            <Grid Grid.Row="5" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- CPU -->
+                <Border Grid.Column="0" Style="{StaticResource Card}" Padding="16">
+                    <StackPanel>
+                        <DockPanel Margin="0,0,0,8">
+                            <TextBlock Text="CPU" Style="{StaticResource Caption}" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"
+                                       DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                            <Ellipse Width="6" Height="6" Fill="{DynamicResource Success}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <TextBlock Style="{StaticResource MetricLarge}" FontWeight="Bold" Foreground="{DynamicResource Success}">
+                            <Run Text="{Binding CpuPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
+                        </TextBlock>
+                        <TextBlock Text="{Binding CpuName}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
+                                   TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                        <TextBlock Text="{Binding CpuCores}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
+                        <ProgressBar AutomationProperties.Name="CPU usage" Height="4" Minimum="0" Maximum="100" Value="{Binding CpuPercent, Mode=OneWay}"
+                                     Foreground="{DynamicResource Success}" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- RAM -->
+                <Border Grid.Column="2" Style="{StaticResource Card}" Padding="16">
+                    <StackPanel>
+                        <DockPanel Margin="0,0,0,8">
+                            <TextBlock Text="MEMORY" Style="{StaticResource Caption}" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"
+                                       DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                            <Ellipse Width="6" Height="6" Fill="{DynamicResource MetricBlue}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <TextBlock Style="{StaticResource MetricLarge}" FontWeight="Bold" Foreground="{DynamicResource MetricBlue}">
+                            <Run Text="{Binding RamPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}" Margin="0,4,0,0">
+                            <Run Text="{Binding RamUsedGB, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                            <Run Text="/"/>
+                            <Run Text="{Binding RamTotalGB, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                            <Run Text="GB used"/>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0">
+                            <Run Text="{Binding RamAvailableGB, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                            <Run Text="GB available"/>
+                            <Run Text=" · "/>
+                            <Run Text="{Binding RamType, Mode=OneWay}"/>
+                        </TextBlock>
+                        <ProgressBar AutomationProperties.Name="Memory usage" Height="4" Minimum="0" Maximum="100" Value="{Binding RamPercent, Mode=OneWay}"
+                                     Foreground="{DynamicResource MetricBlue}" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- GPU -->
+                <Border Grid.Column="4" Style="{StaticResource Card}" Padding="16">
+                    <StackPanel>
+                        <DockPanel Margin="0,0,0,8">
+                            <TextBlock Text="GPU" Style="{StaticResource Caption}" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"
+                                       DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                            <Ellipse Width="6" Height="6" Fill="{DynamicResource MetricPurple}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <TextBlock Style="{StaticResource MetricLarge}" FontWeight="Bold" Foreground="{DynamicResource MetricPurple}">
+                            <Run Text="{Binding GpuPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
+                        </TextBlock>
+                        <TextBlock Text="{Binding GpuName}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
+                                   TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                        <TextBlock Text="{Binding GpuVram}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
+                        <ProgressBar AutomationProperties.Name="GPU usage" Height="4" Minimum="0" Maximum="100" Value="{Binding GpuPercent, Mode=OneWay}"
+                                     Foreground="{DynamicResource MetricPurple}" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- ═══ ROW 6: Temperatures ═══ -->
+            <Border Grid.Row="6" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16">
+                <StackPanel>
+                    <StackPanel Margin="0,0,0,12">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="TEMPERATURES" Style="{StaticResource Caption}" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                            <Button Command="{Binding RelaunchAsAdminCommand}" Margin="10,0,0,0"
+                                    AutomationProperties.Name="Run as administrator for all temperature sensors"
+                                    Padding="6,3" FontSize="10" VerticalAlignment="Center"
+                                    Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="Bd" CornerRadius="{StaticResource RadiusSm}" Padding="{TemplateBinding Padding}"
+                                                Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningStripe}" BorderThickness="1">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource WarningBg}"/>
+                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource WarningStripe}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Run as admin for all sensors" Foreground="{DynamicResource WarningText}"
+                                               FontSize="10" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                        <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}" FontStyle="Italic"
+                                   Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"
+                                   Text="Without admin, only NVIDIA GPU and disk SMART temperatures are available."/>
+                    </StackPanel>
+
+                    <ItemsControl ItemsSource="{Binding Temperatures}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models2:TemperatureReading}">
+                                <Border Background="{DynamicResource Surface2}" CornerRadius="{StaticResource RadiusMd}"
+                                        Padding="14" Margin="0,0,10,10" MinWidth="200" MaxWidth="280">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding DisplayValue}" Style="{StaticResource Metric}" FontWeight="SemiBold"
+                                                   Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"
+                                                   VerticalAlignment="Center" MinWidth="65"/>
+                                        <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding SensorName}" FontSize="12" FontWeight="Medium"
+                                                       TextWrapping="Wrap" MaxWidth="180"/>
+                                            <TextBlock Text="{Binding Component}" FontSize="10"
+                                                       Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Nothing readable. The lighter Subtle line rather than the EmptyState control: these
+                         cards sit in a tight grid and a centred glyph block would push the row. Gated on the
+                         view-model flag, not on Temperatures.Count, so it cannot flash while the first read
+                         is still in flight. -->
+                    <TextBlock Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,14,0,0"
+                               Text="No sensors could be read on this PC. Not every machine exposes them — running as administrator reaches more."
+                               Visibility="{Binding TemperaturesUnavailable, Converter={StaticResource FlexVis}}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ ROW 7: Storage ═══ -->
+            <Border Grid.Row="7" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16">
+                <StackPanel>
+                    <TextBlock Text="STORAGE" Style="{StaticResource Caption}" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
+                    <ItemsControl ItemsSource="{Binding Drives}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:DriveUsageInfo}">
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="30"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding Letter}" Style="{StaticResource Body}" FontWeight="SemiBold"
+                                               VerticalAlignment="Center"/>
+                                    <ProgressBar AutomationProperties.Name="{Binding Letter, StringFormat='Space used on drive {0}'}"
+                                                 Grid.Column="1" Height="8" Minimum="0" Maximum="100"
+                                                 Value="{Binding Percent, Mode=OneWay}"
+                                                 Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"
+                                                 Background="{DynamicResource Surface3}"
+                                                 VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding DisplayUsed}" Style="{StaticResource Caption}"
+                                               Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"
+                                               MinWidth="120" TextAlignment="Right"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ ROW 8: Bottom row (Quick Actions | Alerts | Activity) ═══ -->
+            <Grid Grid.Row="8" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Quick Actions -->
+                <Border Grid.Column="0" Style="{StaticResource Card}" Padding="16">
+                    <StackPanel>
+                        <TextBlock Text="QUICK ACTIONS" Style="{StaticResource Caption}" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
+                        <Button Command="{Binding QuickCleanupCommand}"
+                                AutomationProperties.Name="Run Quick Cleanup"
+                                Style="{StaticResource SecondaryButton}" Padding="10,8" Margin="0,0,0,6"
+                                HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Run Quick Cleanup" VerticalAlignment="Center" FontSize="12"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding QuickUpdateAppsCommand}"
+                                AutomationProperties.Name="Update All Apps"
+                                Style="{StaticResource SecondaryButton}" Padding="10,8" Margin="0,0,0,6"
+                                HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Update All Apps" VerticalAlignment="Center" FontSize="12"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding QuickWindowsUpdateCommand}"
+                                AutomationProperties.Name="Check Windows Updates"
+                                Style="{StaticResource SecondaryButton}" Padding="10,8" Margin="0,0,0,6"
+                                HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE777;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Check Windows Updates" VerticalAlignment="Center" FontSize="12"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding QuickSpeedTestCommand}"
+                                AutomationProperties.Name="Run Speed Test"
+                                Style="{StaticResource SecondaryButton}" Padding="10,8"
+                                HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xEC05;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Run Speed Test" VerticalAlignment="Center" FontSize="12"/>
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Progress section (visible when action running or done) -->
+                        <Border Margin="0,12,0,0" Padding="0,12,0,0" BorderThickness="0,1,0,0"
+                                BorderBrush="{DynamicResource Border1}"
+                                Visibility="{Binding IsQuickActionRunning, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,6">
+                                    <TextBlock Text="{Binding QuickActionName}" FontSize="12" FontWeight="Medium"
+                                               DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding QuickActionStatus}" Style="{StaticResource Caption}"
+                                               DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource MetricBlue}"/>
+                                </DockPanel>
+                                <ProgressBar AutomationProperties.Name="Quick action progress" Height="4" Minimum="0" Maximum="100"
+                                             Value="{Binding QuickActionProgress, Mode=OneWay}"
+                                             Foreground="{DynamicResource MetricBlue}" Background="{DynamicResource Surface3}" Margin="0,0,0,6"/>
+                                <TextBlock Text="{Binding QuickActionDetail}" Style="{StaticResource Caption}"
+                                           Foreground="{DynamicResource TextMuted}" Margin="0,0,0,8"
+                                           Visibility="{Binding QuickActionDetail, Converter={StaticResource FlexVis}}"/>
+                                <Button Content="{Binding QuickActionNavigateLabel}"
+                                        Command="{Binding NavigateToQuickActionTabCommand}"
+                                        Style="{StaticResource GhostButton}" Padding="8,4" FontSize="11"
+                                        Foreground="{DynamicResource MetricBlue}" HorizontalAlignment="Left"
+                                        Visibility="{Binding IsQuickActionDone, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- System Alerts -->
+                <Border Grid.Column="2" Style="{StaticResource Card}" Padding="16">
+                    <StackPanel>
+                        <TextBlock Text="SYSTEM ALERTS" Style="{StaticResource Caption}" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
+                        <ItemsControl ItemsSource="{Binding Alerts}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:DashboardAlert}">
+                                    <StackPanel Margin="0,0,0,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <!-- Loading spinner -->
+                                            <ProgressBar AutomationProperties.Name="{Binding Title, StringFormat='Checking {0}'}" IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0"
+                                                         VerticalAlignment="Center">
+                                                <ProgressBar.Style>
+                                                    <Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding State}" Value="Loading">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ProgressBar.Style>
+                                            </ProgressBar>
+                                            <!-- Severity dot -->
+                                            <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                <Ellipse.Style>
+                                                    <Style TargetType="Ellipse">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Setter Property="Fill" Value="{DynamicResource Success}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding State}" Value="Complete">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Severity}" Value="Yellow">
+                                                                <Setter Property="Fill" Value="{DynamicResource Warning}"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Severity}" Value="Red">
+                                                                <Setter Property="Fill" Value="{DynamicResource Danger}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Ellipse.Style>
+                                            </Ellipse>
+                                            <TextBlock Text="{Binding Title}" Style="{StaticResource Subtle}"
+                                                       Foreground="{DynamicResource TextSecondary}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <!-- ETA (visible only if scan takes >5s) -->
+                                        <TextBlock Text="{Binding Eta}" FontSize="10" Foreground="{DynamicResource TextMuted}"
+                                                   Margin="22,2,0,0"
+                                                   Visibility="{Binding ShowEta, Converter={StaticResource BoolToVis}}"/>
+                                        <!--
+                                            The route out of the dead end (#1496). This card told the user
+                                            something was wrong and then left them to find the fix among 58
+                                            tabs behind 11 collapsed groups — two of these alerts literally
+                                            read "check System Health" without being able to take anyone
+                                            there. Those titles no longer say it, because this does.
+
+                                            Same GhostButton + MetricBlue + Padding 8,4 + FontSize 11 as the
+                                            quick-action "Go to {tab}" affordance two cards to the left, so
+                                            one meaning keeps one appearance.
+
+                                            Gated on CanNavigate, false for every green alert: "Fix this"
+                                            beside "All SMART indicators healthy" would teach the user that
+                                            the button means nothing.
+                                        -->
+                                        <Button Content="Fix this"
+                                                AutomationProperties.Name="{Binding Title, StringFormat='Fix this: {0}'}"
+                                                Command="{Binding DataContext.OpenTabCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding NavTargetId}"
+                                                Style="{StaticResource GhostButton}" Padding="8,4" FontSize="11"
+                                                Foreground="{DynamicResource MetricBlue}" HorizontalAlignment="Left"
+                                                Margin="22,4,0,0"
+                                                Visibility="{Binding CanNavigate, Converter={StaticResource BoolToVis}}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- Recent Activity -->
+                <Border Grid.Column="4" Style="{StaticResource Card}" Padding="16">
+                    <StackPanel>
+                        <TextBlock Text="RECENT ACTIVITY" Style="{StaticResource Caption}" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
+                        <ItemsControl ItemsSource="{Binding RecentActivity}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models2:ActivityEntry}">
+                                    <DockPanel Margin="0,0,0,8">
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding TimeAgo}" FontSize="10"
+                                                   Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Action}" Style="{StaticResource Subtle}" FontWeight="Medium"
+                                                       Foreground="{DynamicResource TextSecondary}"/>
+                                            <TextBlock Text="{Binding Detail}" FontSize="10"
+                                                       Foreground="{DynamicResource TextMuted}"
+                                                       Visibility="{Binding Detail, Converter={StaticResource FlexVis}}"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="No activity recorded yet" FontSize="12" FontStyle="Italic"
+                                   Foreground="{DynamicResource TextMuted}" Margin="0,4,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding RecentActivity.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- ═══ ROW 9: Status bar ═══ -->
+            <TextBlock Grid.Row="9" Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" Margin="0,4,0,0"/>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

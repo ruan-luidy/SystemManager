@@ -5,9 +5,9 @@
 using System.IO;
 using Microsoft.Win32;
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.ContextMenu;
+using SysManager.Features.ContextMenu.Models;
+using SysManager.Features.ContextMenu.Services;
 
 namespace SysManager.Tests;
 

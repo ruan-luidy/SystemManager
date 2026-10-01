@@ -6,8 +6,10 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Management.Automation;
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.ScheduledMaintenance;
+using SysManager.Features.ScheduledMaintenance.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

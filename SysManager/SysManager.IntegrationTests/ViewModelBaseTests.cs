@@ -3,7 +3,7 @@
 // License: MIT
 
 using CommunityToolkit.Mvvm.ComponentModel;
-using SysManager.ViewModels;
+using SysManager.Shared;
 
 namespace SysManager.IntegrationTests;
 

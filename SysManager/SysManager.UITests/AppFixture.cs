@@ -10,6 +10,7 @@ using FlaUI.Core.Conditions;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.Tools;
 using FlaUI.UIA3;
+using SysManager.Shell;
 
 namespace SysManager.UITests;
 

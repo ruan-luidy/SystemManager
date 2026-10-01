@@ -3,9 +3,9 @@
 // License: MIT
 
 using System.Windows;
-using SysManager.Services;
-using SysManager.ViewModels;
-using SysManager.Views;
+using SysManager.Features.DeepCleanup;
+using SysManager.Shared.Services;
+using SysManager.Shell;
 
 namespace SysManager.IntegrationTests;
 

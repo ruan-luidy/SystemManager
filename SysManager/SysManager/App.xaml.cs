@@ -9,8 +9,16 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.CliInterface;
+using SysManager.Features.CliInterface.Models;
+using SysManager.Features.CliInterface.Services;
+using SysManager.Features.Dashboard;
+using SysManager.Features.Dashboard.Services;
+using SysManager.Features.ResourceHistory;
+using SysManager.Features.ResourceHistory.Services;
+using SysManager.Shared.Helpers;
+using SysManager.Shared.Services;
+using SysManager.Shell;
 
 namespace SysManager;
 
@@ -211,11 +219,11 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// True when this instance was started by <see cref="Helpers.AdminHelper.RelaunchAsAdmin"/>
+    /// True when this instance was started by <see cref="AdminHelper.RelaunchAsAdmin"/>
     /// (carries the elevation sentinel argument).
     /// </summary>
     private static bool WasRelaunchedElevated(string[] args)
-        => args.Any(a => string.Equals(a, Helpers.AdminHelper.RelaunchedElevatedArg, StringComparison.OrdinalIgnoreCase));
+        => args.Any(a => string.Equals(a, AdminHelper.RelaunchedElevatedArg, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Waits up to a few seconds for the outgoing instance to release the single-instance

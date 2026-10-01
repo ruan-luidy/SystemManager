@@ -4,9 +4,10 @@
 
 using System.IO;
 using NSubstitute;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.FileLock;
+using SysManager.Features.FileLock.Models;
+using SysManager.Features.FileLock.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

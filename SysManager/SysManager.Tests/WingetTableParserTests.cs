@@ -3,7 +3,7 @@
 // License: MIT
 
 using System.Text.RegularExpressions;
-using SysManager.Helpers;
+using SysManager.Shared.Helpers;
 
 namespace SysManager.Tests;
 

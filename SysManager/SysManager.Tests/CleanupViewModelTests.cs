@@ -5,10 +5,9 @@
 using System.IO;
 using System.Reflection;
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.Cleanup;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -444,7 +443,7 @@ public class CleanupViewModelTests
         // regardless: it looks at the call statement's shape, so it can only pass if the result is bound
         // to something, and only fail if the call stands alone as a discarded statement.
         var source = File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "ViewModels", "CleanupViewModel.cs"));
+            TestPaths.AppPath("ViewModels", "CleanupViewModel.cs"));
 
         var callSites = source
             .Split('\n')

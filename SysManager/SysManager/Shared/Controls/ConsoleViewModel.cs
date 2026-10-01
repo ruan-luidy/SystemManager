@@ -1,0 +1,65 @@
+// SysManager · ConsoleViewModel
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Windows;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using SysManager.Shared.Models;
+
+namespace SysManager.Shared.Controls;
+
+/// <summary>
+/// Shared, scrollable console view-model. Each tab has its own instance.
+/// Lines are capped to avoid unbounded memory growth on long-running installs.
+/// </summary>
+public sealed partial class ConsoleViewModel : ObservableObject
+{
+    private const int MaxLines = 5000;
+    private readonly Lock _gate = new();
+
+    public ObservableCollection<PowerShellLine> Lines { get; } = new();
+
+    [ObservableProperty] private bool _autoScroll = true;
+
+    public void Append(PowerShellLine line)
+    {
+        // Marshal to UI thread
+        if (Application.Current?.Dispatcher.CheckAccess() == false)
+        {
+            Application.Current.Dispatcher.BeginInvoke(() => Append(line));
+            return;
+        }
+        // Even on the UI thread, two services can BeginInvoke in quick
+        // succession and Clear might run between reads; protect mutations.
+        lock (_gate)
+        {
+            Lines.Add(line);
+            while (Lines.Count > MaxLines)
+                Lines.RemoveAt(0);
+        }
+    }
+
+    [RelayCommand]
+    private void Clear()
+    {
+        lock (_gate) Lines.Clear();
+    }
+
+    [RelayCommand]
+    private void CopyAll()
+    {
+        PowerShellLine[] snapshot;
+        lock (_gate) snapshot = Lines.ToArray();
+        try
+        {
+            var text = string.Join(Environment.NewLine, snapshot.Select(l => $"[{l.Timestamp.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}] {l.Kind}: {l.Text}"));
+            Clipboard.SetText(text);
+        }
+        catch (System.Runtime.InteropServices.ExternalException) { /* clipboard locked or unavailable */ }
+        catch (System.Threading.ThreadStateException) { /* no STA thread (headless/CI) */ }
+        catch (InvalidOperationException) { /* clipboard not available in this context */ }
+    }
+}

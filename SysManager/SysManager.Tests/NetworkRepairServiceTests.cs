@@ -3,7 +3,8 @@
 // License: MIT
 
 using NSubstitute;
-using SysManager.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -13,7 +14,7 @@ namespace SysManager.Tests;
 /// Each repair routes a fixed command through the <see cref="IPowerShellRunner"/>
 /// seam (<c>ipconfig /flushdns</c>, <c>netsh winsock reset</c>,
 /// <c>netsh int ip reset</c>) and maps the exit code plus a fixed reboot flag
-/// into a <see cref="SysManager.Models.NetworkRepairResult"/>. These tests pin
+/// into a <see cref="SysManager.Shared.Models.NetworkRepairResult"/>. These tests pin
 /// the exact invocation and the Success/NeedsReboot mapping with zero OS
 /// interaction by substituting the runner.
 /// </para>
@@ -115,8 +116,8 @@ public class NetworkRepairServiceTests
               .Returns(_ =>
               {
                   // Simulate the runner streaming a line mid-execution.
-                  runner.LineReceived += Raise.Event<Action<SysManager.Models.PowerShellLine>>(
-                      SysManager.Models.PowerShellLine.Output("Successfully flushed the DNS Resolver Cache."));
+                  runner.LineReceived += Raise.Event<Action<SysManager.Shared.Models.PowerShellLine>>(
+                      SysManager.Shared.Models.PowerShellLine.Output("Successfully flushed the DNS Resolver Cache."));
                   return 0;
               });
         using var svc = new NetworkRepairService(runner);

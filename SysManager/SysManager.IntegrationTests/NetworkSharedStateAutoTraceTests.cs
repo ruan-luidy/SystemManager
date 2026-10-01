@@ -2,9 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.Traceroute;
+using SysManager.Shared;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 

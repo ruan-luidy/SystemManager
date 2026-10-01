@@ -3,7 +3,8 @@
 // License: MIT
 
 using NSubstitute;
-using SysManager.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -154,8 +155,8 @@ public class PerformanceServiceTests
                   .Returns(_ =>
                   {
                       foreach (var line in lines)
-                          runner.LineReceived += Raise.Event<Action<SysManager.Models.PowerShellLine>>(
-                              SysManager.Models.PowerShellLine.Output(line));
+                          runner.LineReceived += Raise.Event<Action<SysManager.Shared.Models.PowerShellLine>>(
+                              SysManager.Shared.Models.PowerShellLine.Output(line));
                       return 0;
                   });
         Answer("/list", listLines);

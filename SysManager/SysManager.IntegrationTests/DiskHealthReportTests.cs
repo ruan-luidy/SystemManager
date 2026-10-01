@@ -2,7 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Models;
+using SysManager.Shared.Models;
 
 namespace SysManager.IntegrationTests;
 

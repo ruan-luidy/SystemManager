@@ -2,8 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.Models;
-using SysManager.Services;
+using SysManager.Features.Logs;
+using SysManager.Features.Logs.Models;
+using SysManager.Features.Logs.Services;
+using SysManager.Shared.Models;
 
 namespace SysManager.IntegrationTests;
 

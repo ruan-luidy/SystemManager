@@ -3,8 +3,8 @@
 // License: MIT
 
 using CommunityToolkit.Mvvm.Input;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.DisplayProfile;
+using SysManager.Features.DisplayProfile.Services;
 using Xunit;
 
 namespace SysManager.Tests;
@@ -59,7 +59,7 @@ public class DisplayProfileViewModelTests
         var device = typeof(DisplayProfileViewModel).GetField(
             "_previousDevice", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         Assert.NotNull(device);
-        Assert.Equal("SysManager.Models.DisplayDevice", device!.FieldType.FullName);
+        Assert.Equal("SysManager.Features.DisplayProfile.Models.DisplayDevice", device!.FieldType.FullName);
     }
 
     // ── Progress feedback (regression) ──

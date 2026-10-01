@@ -1,0 +1,96 @@
+// SysManager · HealthScoreResult — aggregated system health score
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+
+using SysManager.Shared.Helpers;
+
+namespace SysManager.Shared.Models;
+
+/// <summary>
+/// Aggregated health score (0–100) combining disk health, RAM usage,
+/// uptime, and battery wear. Higher is better.
+/// </summary>
+public sealed record HealthScoreResult
+{
+    /// <summary>Overall score 0–100 (100 = perfect health).</summary>
+    public int Score { get; init; }
+
+    /// <summary>Color hex for the gauge arc.</summary>
+    public string ColorHex => Score switch
+    {
+        >= 80 => StatusColors.Good,  // green
+        >= 50 => StatusColors.Warning,  // amber
+        _ => StatusColors.Bad       // red
+    };
+
+    /// <summary>Human-readable label for the score.</summary>
+    public string Label => Score switch
+    {
+        >= 90 => "Excellent",
+        >= 80 => "Good",
+        >= 60 => "Fair",
+        >= 40 => "Needs attention",
+        _ => "Poor"
+    };
+
+    /// <summary>Top recommendations (max 3).</summary>
+    public IReadOnlyList<HealthRecommendation> Recommendations { get; init; }
+        = [];
+
+    /// <summary>Individual component scores for breakdown display.</summary>
+    public int DiskScore { get; init; } = 100;
+
+    /// <summary>How much room the system drive has left. 100 is comfortable, 10 is nearly full.</summary>
+    /// <remarks>
+    /// Added because the overall score could read "Excellent" on a machine that was out of space — SMART
+    /// healthy, RAM under 60% and a recent reboot were enough, and a full system drive is the commonest real
+    /// cause of "it got slow" as well as what breaks Windows Update and app installs.
+    /// </remarks>
+    public int FreeSpaceScore { get; init; } = 100;
+    public int RamScore { get; init; } = 100;
+    public int UptimeScore { get; init; } = 100;
+    public int BatteryScore { get; init; } = 100;
+    public bool HasBattery { get; init; }
+
+    /// <summary>
+    /// Components whose source produced no data at all, by name: "Disk", "Memory", "Uptime".
+    /// </summary>
+    /// <remarks>
+    /// Exists because a score alone cannot distinguish "healthy" from "never read". DiskHealthService
+    /// swallows WMI failures and returns its partially-filled list, so a broken or access-denied Storage
+    /// namespace arrives as an empty list, and the component score used to collapse that onto 100 — which the
+    /// Dashboard rendered as "All SMART indicators healthy". The scores now fall back to the same 80 the
+    /// per-drive unknown rule uses, so a false green is impossible, and this list lets a caller say
+    /// "unavailable" instead of guessing at a verdict from a number.
+    /// </remarks>
+    public IReadOnlyList<string> UnavailableComponents { get; init; } = [];
+
+    /// <summary>True when <paramref name="component"/> reported nothing. See <see cref="UnavailableComponents"/>.</summary>
+    public bool IsUnavailable(string component) => UnavailableComponents.Contains(component);
+}
+
+/// <summary>A single health recommendation shown below the gauge.</summary>
+public sealed record HealthRecommendation
+{
+    public required string Message { get; init; }
+    public required string Severity { get; init; }  // "warning" or "critical"
+
+    public string IconGlyph => Severity == "critical" ? "\uE783" : "\uE7BA";
+    public string ColorHex => Severity == "critical" ? StatusColors.Bad : StatusColors.Warning;
+
+    /// <summary>
+    /// The nav id of the tab that can act on this recommendation, or empty when there is nothing to open.
+    /// </summary>
+    /// <remarks>
+    /// Every recommendation named a fix and gave no route to it \u2014 "Restart recommended", "health degraded
+    /// - consider backup", "High memory usage - close unused apps" (#1496). Same reasoning and same shape
+    /// as <c>DashboardAlert.NavTargetId</c>: an id, not a command, so the model stays a description.
+    /// <para>Empty is legitimate and expected: "consider replacement" for a worn battery, or a restart,
+    /// are things no tab in this app does, and inventing a destination for them would be worse than a
+    /// recommendation that simply reads as advice.</para>
+    /// </remarks>
+    public string NavTargetId { get; init; } = "";
+
+    /// <summary>True when this recommendation has somewhere to send the user.</summary>
+    public bool CanNavigate => !string.IsNullOrEmpty(NavTargetId);
+}

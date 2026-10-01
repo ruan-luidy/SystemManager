@@ -4,7 +4,7 @@
 
 using System.IO;
 using System.Net.NetworkInformation;
-using SysManager.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

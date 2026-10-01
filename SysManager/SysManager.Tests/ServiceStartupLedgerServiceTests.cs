@@ -4,7 +4,9 @@
 
 using System.IO;
 using NSubstitute;
-using SysManager.Services;
+using SysManager.Features.WindowsServices;
+using SysManager.Features.WindowsServices.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

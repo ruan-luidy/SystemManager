@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using SysManager.ViewModels;
+using SysManager.Features.LargeFiles;
+using SysManager.Features.LargeFiles.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -11,13 +13,13 @@ namespace SysManager.Tests;
 /// (#1523); the assertions are the same ones, against the renamed surface.
 /// </summary>
 /// <remarks>
-/// Serialized because the scan takes the process-wide <see cref="Services.OperationLockService"/> Disk lock.
+/// Serialized because the scan takes the process-wide <see cref="OperationLockService"/> Disk lock.
 /// </remarks>
 [Collection("ProcessWideStatics")]
 public class LargeFilesViewModelTests
 {
     private static LargeFilesViewModel NewVm() =>
-        new(new Services.LargeFileScanner(), new Services.FixedDriveService());
+        new(new LargeFileScanner(), new FixedDriveService());
 
     [Fact]
     public void Constructor_ScanStatusEmpty()

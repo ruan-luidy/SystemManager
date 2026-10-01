@@ -7,7 +7,12 @@ using System.IO;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Reflection;
-using SysManager.Services;
+using SysManager.Features.Defender;
+using SysManager.Features.Defender.Services;
+using SysManager.Features.DnsHosts;
+using SysManager.Features.DnsHosts.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
@@ -630,7 +635,7 @@ public class PowerShellRunnerTests
     {
         var runner = new PowerShellRunner();
         var received = false;
-        void Handler(Models.PowerShellLine _) => received = true;
+        void Handler(PowerShellLine _) => received = true;
         runner.LineReceived += Handler;
         runner.LineReceived -= Handler;
         Assert.False(received);

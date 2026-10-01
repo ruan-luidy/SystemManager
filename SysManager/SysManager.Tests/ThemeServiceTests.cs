@@ -5,7 +5,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows.Media;
-using SysManager.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

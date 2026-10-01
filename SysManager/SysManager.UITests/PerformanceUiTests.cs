@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Diagnostics;
+using SysManager.Shell;
 
 namespace SysManager.UITests;
 

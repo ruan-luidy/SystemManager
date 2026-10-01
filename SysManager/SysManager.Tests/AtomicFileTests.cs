@@ -4,7 +4,7 @@
 
 using System.IO;
 using System.Text;
-using SysManager.Helpers;
+using SysManager.Shared.Helpers;
 
 namespace SysManager.Tests;
 

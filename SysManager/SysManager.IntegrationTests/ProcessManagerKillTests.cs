@@ -5,7 +5,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text;
-using SysManager.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.IntegrationTests;
 

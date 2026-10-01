@@ -3,7 +3,7 @@
 // License: MIT
 
 using System.Diagnostics.Eventing.Reader;
-using SysManager.Services;
+using SysManager.Shared.Services;
 using static SysManager.Tests.ScriptedBootReader;
 
 namespace SysManager.Tests;

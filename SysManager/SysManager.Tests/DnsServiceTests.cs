@@ -6,7 +6,9 @@ using System.Collections.ObjectModel;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using NSubstitute;
-using SysManager.Services;
+using SysManager.Features.DnsHosts;
+using SysManager.Features.DnsHosts.Services;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 

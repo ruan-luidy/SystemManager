@@ -3,8 +3,8 @@
 // License: MIT
 
 using System.IO;
-using SysManager.Models;
-using SysManager.ViewModels;
+using SysManager.Features.DeepCleanup;
+using SysManager.Shared.Models;
 
 namespace SysManager.Tests;
 
@@ -147,13 +147,7 @@ public class DeepCleanupSelectionCarryForwardTests
         // Without this, the logic above could be perfectly correct and wired to nothing — the defect class
         // this repo hits most often. A scan walks the real filesystem, so the call site is asserted in the
         // source rather than by running it; the assertions above cover the behaviour.
-        var dir = new DirectoryInfo(Path.GetDirectoryName(typeof(CleanupCategory).Assembly.Location)!);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "ViewModels")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-
-        var source = File.ReadAllText(Path.Combine(
-            dir!.FullName, "SysManager", "ViewModels", "DeepCleanupViewModel.cs"));
+        var source = File.ReadAllText(TestPaths.AppPath("ViewModels", "DeepCleanupViewModel.cs"));
 
         // The call, not merely the name: the declaration itself contains "CarryForwardSelection".
         Assert.Contains("CarryForwardSelection(Categories,", source, StringComparison.Ordinal);

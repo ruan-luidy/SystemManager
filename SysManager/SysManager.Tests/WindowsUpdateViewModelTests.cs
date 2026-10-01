@@ -4,10 +4,11 @@
 
 using System.Reflection;
 using NSubstitute;
-using SysManager.Helpers;
-using SysManager.Models;
-using SysManager.Services;
-using SysManager.ViewModels;
+using SysManager.Features.WindowsUpdate;
+using SysManager.Features.WindowsUpdate.Models;
+using SysManager.Features.WindowsUpdate.Services;
+using SysManager.Shared.Models;
+using SysManager.Shared.Services;
 
 namespace SysManager.Tests;
 
