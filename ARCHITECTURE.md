@@ -14,18 +14,20 @@ Built by [laurentiu021](https://github.com/laurentiu021) · MIT licensed.
 SysManager/
 ├── SysManager/                 # main WPF app
 │   ├── Data/                   # static data files (ProcessDescriptions.json)
-│   ├── Models/                 # POCOs (snapshots, samples, reports, cleanup categories)
-│   ├── Services/               # Windows / PowerShell / CLI wrappers
-│   ├── ViewModels/             # one VM per tab + MainWindowViewModel
-│   ├── Views/                  # XAML views + code-behind, plus four shared controls:
-│   │                           #   AdminBanner (the elevation banner, 30 tabs)
-│   │                           #   EmptyState  (icon + title + message for an empty list)
-│   │                           #   DevelopmentBanner (the PREVIEW notice)
-│   │                           #   StatusFooter (progress bar + status line, 21 tabs)
-│   ├── Helpers/                # AdminHelper, converters, collections, parsers
+│   ├── Features/               # one folder per tab: <Page>View.xaml(.cs) + <Page>ViewModel.cs,
+│   │                           #   with the tab's own Services/, Models/ and Helpers/ beside them
+│   ├── Shared/
+│   │   ├── Controls/           # AdminBanner (the elevation banner, 30 tabs)
+│   │   │                       # EmptyState  (icon + title + message for an empty list)
+│   │   │                       # DevelopmentBanner (the PREVIEW notice)
+│   │   │                       # StatusFooter (progress bar + status line, 21 tabs), ConsoleView
+│   │   ├── Services/           # Windows / PowerShell / CLI wrappers used by more than one tab
+│   │   ├── Models/             # POCOs (snapshots, samples, reports, cleanup categories)
+│   │   ├── Helpers/            # AdminHelper, converters, collections, parsers
+│   │   └── ViewModelBase.cs
+│   ├── Shell/                  # MainWindow, MainWindowViewModel, NavGroup/NavItem, ThemePopup
 │   ├── Resources/              # icons and assets
 │   ├── App.xaml(.cs)
-│   ├── MainWindow.xaml(.cs)
 │   ├── ServiceRegistration.cs  # DI container configuration
 │   └── SysManager.csproj
 ├── SysManager.Tests/           # xUnit unit tests (CI-safe, no system deps)
@@ -426,12 +428,12 @@ Key services:
   post-pass, `VerifySignatures`, answers "who really made this" with a certificate rather
   than `FileVersionInfo.CompanyName`, which is the string the `Publisher` column shows and
   which any program can set to "Microsoft Corporation". It uses the shared
-  `Helpers/SignatureVerdict`, which asks Windows via `WinVerifyTrust` — **not** the managed
+  `Shared/Helpers/SignatureVerdict`, which asks Windows via `WinVerifyTrust` — **not** the managed
   chain the two fail-closed gates build. Results are cached per resolved executable path,
   since several entries pointing at one exe is normal. `ResolveExecutablePath` is the single
   answer to "which file is this entry", shared with `ExtractPublisher`, so the Publisher and
   the certificate can never describe different files.
-- `Helpers/SelectionCarry` — keeps the user's ticks when a bound list is rebuilt, defined once for
+- `Shared/Helpers/SelectionCarry` — keeps the user's ticks when a bound list is rebuilt, defined once for
   the nine tabs that rebuild one from a fresh scan: System Health drives, Deep Cleanup categories,
   Shortcut Cleaner, Browser Cleaner, App Updates, Profile Export, App Blocker, Debloater and
   Uninstaller. The six it started with used to re-derive the tick from a default, and in four the
@@ -450,7 +452,7 @@ Key services:
   them at Debug without changing what a collision does, and `DuplicateKeys` is public so a service
   can assert the invariant over its own scan output — the only way to catch a duplicate that comes
   from the DATA rather than from the choice of key (#2405).
-- `Helpers/SettlingProgress` — the `IProgress<T>` a tab hands to a service it awaits, defined once
+- `Shared/Helpers/SettlingProgress` — the `IProgress<T>` a tab hands to a service it awaits, defined once
   for the eleven sites across nine view models whose callback writes a property their own post-await
   code writes again as its final value. `Progress<T>` captures the `SynchronizationContext` in its
   own constructor and delivers each report by POSTING to it, so the caller's terminal write wins
@@ -469,7 +471,7 @@ Key services:
   checks BOTH halves, because they fail independently: the TYPE at each construction, and the
   HANDOVER at every later use of the reporter. A site that builds the wrapper and then passes it to
   the service directly is the original defect with the primitive sitting unused beside it.
-- `Helpers/SafeFileWalk` — the one directory walk every service that deletes or overwrites what it
+- `Shared/Helpers/SafeFileWalk` — the one directory walk every service that deletes or overwrites what it
   finds goes through. Four rules live here rather than at eight copies of a stack loop: never enter a
   reparse point (the root, a directory, **or a file**), skip the excluded subtrees, honour the
   cancellation token between directories, and absorb a listing that throws from `MoveNext` rather
@@ -487,7 +489,7 @@ Key services:
   still test its traversal root through `SafeFileWalk.IsReparsePoint`, because the root is the one
   the user picks and a link there sends the whole scan somewhere else. The guard fails if an
   exempted file stops walking a tree (a stale name nobody would remove) or stops guarding its root.
-- `Helpers/Csv` — RFC 4180 field escaping for the Export CSV buttons, defined once. It exists
+- `Shared/Helpers/Csv` — RFC 4180 field escaping for the Export CSV buttons, defined once. It exists
   because the first exporter (`ResourceHistoryService.ToCsv`) writes its fields raw, which is
   safe for numbers and fixed-format timestamps but not for the app names, setting descriptions
   and folder paths the later exports carry: `C:\Users\me\Music\Grieg, Peer Gynt` is an ordinary
@@ -495,7 +497,7 @@ Key services:
   value contains a comma, a quote, CR or LF; `AppendRow` terminates with CRLF because this is a
   file format rather than console output. Nothing is trimmed or substituted — a lossy export of
   a path is worse than a quoted one.
-- `Helpers/Authenticode` — the two Authenticode operations, defined once: `ReadSigner`
+- `Shared/Helpers/Authenticode` — the two Authenticode operations, defined once: `ReadSigner`
   (three-way `Signed`/`Unsigned`/`Unreadable`, never throws) and `ValidateChain` (one strict
   policy — `ExcludeRoot`, `NoFlag`, fail-closed — with the revocation mode as a parameter).
   `PolicyFor` builds that policy, and it exists because **`Offline` revocation alone does not
@@ -515,7 +517,7 @@ Key services:
   `RevocationStatusUnknown` (46 of 48, no cached CRL) and `PartialChain` (29, intermediate not
   local). Loosening the flags enough to pass means `AllowUnknownCertificateAuthority`, which
   accepts any certificate authority and verifies nothing.
-- `Helpers/QuitGuard` — the one question every exit asks while something is still running,
+- `Shared/Helpers/QuitGuard` — the one question every exit asks while something is still running,
   defined once. Closing disposes the tabs, each cancels its work, and a cancelled repair or install
   is ended part-way, so the tray's Exit, closing the window, `AdminHelper.RelaunchAsAdmin` and About's
   install and go-back all go through it. It reads what is running from `OperationLockService`, which
@@ -523,7 +525,7 @@ Key services:
   keeping a second list. An operation that takes no lock is not seen by it.
   `ArchitectureTests.EveryExit_AsksFirstWhileSomethingRuns` fails any `App.RequestShutdown()` caller
   that does not ask.
-- `Helpers/WindowsTrust` — `WinVerifyTrust` behind a four-state answer
+- `Shared/Helpers/WindowsTrust` — `WinVerifyTrust` behind a four-state answer
   (`Trusted`/`NoSignature`/`Expired`/`NotTrusted`), the mechanism Explorer's Digital Signatures
   tab and Process Explorer use. Over the same 82 images: 46 trusted, 1 genuine failure. Called
   with `WTD_REVOKE_NONE` plus `WTD_CACHE_ONLY_URL_RETRIEVAL`, which is a supported way to say
@@ -558,7 +560,7 @@ Key services:
   already closed from one Windows would not end. The start time is the listed one: a process ID
   reused while the confirmation was open names a different program, which is left alone.
   `VerifySignatures(entries, cache)` fills the Signature column from the
-  running image's certificate, through the shared `Helpers/SignatureVerdict`.
+  running image's certificate, through the shared `Shared/Helpers/SignatureVerdict`.
   **Deliberately NOT called from `Snapshot`.** It was, and the cost was measured: ~25 ms per
   file over ~82 distinct images, so `SnapshotAsync` took ~3.7–4.2 s — spent before the list
   appeared, on the tab someone opens *because* something is wrong. Moving it out took the same
@@ -579,16 +581,16 @@ Key services:
   The signature pair MUST stay in `ReconcileInto`'s
   identity group: a fresh entry for a tracked PID carries no path, so its verdict is
   `Unknown`, and copying it across would blank the column one tick after it appeared.
-- `Helpers/SignatureVerdict` — the file-path-to-three-state answer both the Startup Manager
+- `Shared/Helpers/SignatureVerdict` — the file-path-to-three-state answer both the Startup Manager
   and the Process Manager render, plus the sentence shown on hover. Separate from
-  `Helpers/Authenticode` on purpose: that type answers only the mechanical questions and
+  `Shared/Helpers/Authenticode` on purpose: that type answers only the mechanical questions and
   holds no policy, because the two fail-closed gates disagree with each other on what an
   unsigned file means. This one carries exactly one policy — the informational one, for
   columns that describe many files and admit no code: unsigned is ordinary, nothing reaches
   the network, every answer comes with a readable sentence. A gate adopting those would stop
   being a gate. Shared rather than copied so two tabs cannot describe one certificate in
   two different sentences.
-  The verdict comes from `Helpers/WindowsTrust`; the certificate is still read, but **only for
+  The verdict comes from `Shared/Helpers/WindowsTrust`; the certificate is still read, but **only for
   the publisher's name**, never for the verdict. That ordering is the fix: a name is cosmetic,
   so failing to read one costs a phrase in a tooltip, while the verdict decides a colour. Every
   phrasing here has a form that works with no name, which is what lets the name be optional.
@@ -1283,7 +1285,7 @@ Four keys are handled at the shell. Two of them ask the OPEN TAB what to do, thr
   it, and the named command must begin with Refresh/Rescan/Reload/Scan/Load — which
   mechanically keeps Clean, Delete, Apply and Uninstall off a bare keypress.
 
-`Ctrl+F` is the third, and takes no seam at all: `Helpers/FilterBoxes` walks the visual tree under
+`Ctrl+F` is the third, and takes no seam at all: `Shared/Helpers/FilterBoxes` walks the visual tree under
 `ContentHost` — the element the shell binds the live tab into — for the first `TextBox` whose `Text`
 binds one of four property names (`FilterText`, `SearchText`, `SearchQuery`, `Filter`), then focuses
 and selects it. Focusing a control is a View concern, so routing it through a view model would have

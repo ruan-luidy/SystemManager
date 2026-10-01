@@ -87,11 +87,9 @@ foreach ($p in @(
 SysManager/
 ├── SysManager/                # main WPF app
 │   ├── Data/                   # static data (ProcessDescriptions.json)
-│   ├── Models/                # POCOs (no logic)
-│   ├── Services/              # Windows / PowerShell / CLI wrappers
-│   ├── ViewModels/            # MVVM, one per tab
-│   ├── Views/                 # XAML + minimal code-behind
-│   ├── Helpers/               # small utilities, converters
+│   ├── Features/<Page>/       # View + ViewModel of one tab, plus its own Services/Models/Helpers
+│   ├── Shared/                # Controls, Services, Models, Helpers used by more than one tab
+│   ├── Shell/                 # MainWindow, navigation, theme popup
 │   └── Resources/             # icons, generated assets
 ├── SysManager.Tests/          # xUnit unit tests
 ├── SysManager.IntegrationTests/ # integration tests (CI, non-blocking)
